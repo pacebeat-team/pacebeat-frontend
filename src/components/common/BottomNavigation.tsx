@@ -7,7 +7,7 @@ export interface NavItemConfig {
   icon: (props: { active: boolean; className?: string }) => ReactNode
 }
 
-// 임시 플레이스홀더 아이콘 (이후 Figma 정식 SVG 에셋으로 쉽게 교체 가능하도록 개별 컴포넌트로 분리)
+// Figma 디자인 에셋 기반 네비게이션 아이콘 (nav-rounded-*.svg)
 export function HomeIcon({ className = '' }: { active?: boolean; className?: string }) {
   return (
     <svg
@@ -15,14 +15,13 @@ export function HomeIcon({ className = '' }: { active?: boolean; className?: str
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M3 10.5L12 3l9 7.5" />
-      <path d="M5 9.5V20a1 1 0 001 1h12a1 1 0 001-1V9.5" />
-      <path d="M10 21v-7h4v7" />
+      <path d="M3.5 10.1 Q3.5 8.9 4.5 8 L10.5 2.8 Q12 1.5 13.5 2.8 L19.5 8 Q20.5 8.9 20.5 10.1 V19.4 Q20.5 21.5 18.4 21.5 H5.6 Q3.5 21.5 3.5 19.4 Z" />
+      <path d="M9 21.5 V16.5 A3 3 0 0 1 15 16.5 V21.5" />
     </svg>
   )
 }
@@ -34,15 +33,15 @@ export function RunningIcon({ className = '' }: { active?: boolean; className?: 
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <circle cx="14" cy="4" r="2" />
-      <path d="M16 8l-4 3 2 4 4 1" />
-      <path d="M10 11l-3 3-4-1" />
-      <path d="M12 11l-2 5-3 4" />
+      <circle cx="15.5" cy="3.5" r="2.5" />
+      <path d="M6 10.6 C7.4 7.2 9.9 6.5 12.1 8.5 L15.4 11 Q16.5 11.9 18.4 11.9 H21" />
+      <path d="M12.1 8.5 L9.3 14.4 C7.9 17.5 5.9 18.8 2.5 18.1" />
+      <path d="M9.3 14.4 C13.7 14.7 16.8 17 13.2 21.5" />
     </svg>
   )
 }
@@ -54,15 +53,13 @@ export function RecordsIcon({ className = '' }: { active?: boolean; className?: 
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect x="4" y="3" width="16" height="18" rx="2" />
-      <path d="M8 8h8" />
-      <path d="M8 12h8" />
-      <path d="M8 16h5" />
+      <rect x="3" y="4.5" width="18" height="17" rx="4" />
+      <path d="M3.5 10 H20.5 M8 2.5 V7 M16 2.5 V7" />
     </svg>
   )
 }
@@ -74,14 +71,12 @@ export function GrowthIcon({ className = '' }: { active?: boolean; className?: s
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M3 20h18" />
-      <path d="M6 16l5-5 4 4 6-7" />
-      <path d="M17 8h4v4" />
+      <path d="M12 21.5 V13.3 C12 6.5 16.7 3 21.5 3 C21.8 9.7 18.5 14 12 14 C5.5 14 2.2 10.3 2.5 4 C7.8 3.8 12 7 12 13.3" />
     </svg>
   )
 }
@@ -93,13 +88,13 @@ export function MyIcon({ className = '' }: { active?: boolean; className?: strin
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c0-4 3.5-6 8-6s8 2 8 6" />
+      <circle cx="12" cy="5" r="3.5" />
+      <path d="M4.5 21.5 Q3 21.5 3 20 C3 15.2 6.8 12 12 12 C17.2 12 21 15.2 21 20 Q21 21.5 19.5 21.5 Z" />
     </svg>
   )
 }
