@@ -5,6 +5,7 @@ import { RunningPage } from '../pages/RunningPage'
 import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
+import { SplashPage } from '../pages/SplashPage'
 
 export const router = createBrowserRouter([
   {
@@ -13,7 +14,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/home" replace />,
+        element: <SplashPage />,
       },
       {
         path: 'home',
