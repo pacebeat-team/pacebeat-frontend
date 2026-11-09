@@ -32,20 +32,22 @@ export function SplashPage() {
   }, [handleNavigateToHome])
 
   return (
-    <div className="relative w-full max-w-[390px] h-dvh min-h-dvh mx-auto bg-black overflow-hidden flex items-center justify-center">
-      <video
-        ref={videoRef}
-        src={splashVideo}
-        poster={splashPoster}
-        autoPlay
-        muted
-        playsInline
-        preload="auto"
-        onEnded={handleNavigateToHome}
-        onError={handleNavigateToHome}
-        className="w-full h-full object-cover"
-        aria-label="P!PACE 스플래시 인트로 영상"
-      />
+    <div className="relative w-full h-full flex-1 flex items-center justify-center bg-[#FEFEFE]">
+      <div className="w-[100px] h-[100px] flex items-center justify-center">
+        <video
+          ref={videoRef}
+          src={splashVideo}
+          poster={splashPoster}
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          onEnded={handleNavigateToHome}
+          onError={handleNavigateToHome}
+          className="w-full h-full object-contain"
+          aria-label="P!PACE 스플래시 인트로 영상"
+        />
+      </div>
     </div>
   )
 }
