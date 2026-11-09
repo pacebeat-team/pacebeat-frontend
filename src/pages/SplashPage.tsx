@@ -9,10 +9,10 @@ export function SplashPage() {
   const hasNavigatedRef = useRef(false)
   const [step, setStep] = useState<'video' | 'logo'>('video')
 
-  const handleNavigateToHome = useCallback(() => {
+  const handleNavigateToOnboarding = useCallback(() => {
     if (hasNavigatedRef.current) return
     hasNavigatedRef.current = true
-    navigate('/home', { replace: true })
+    navigate('/onboarding', { replace: true })
   }, [navigate])
 
   const handleVideoEnded = useCallback(() => {
@@ -39,21 +39,21 @@ export function SplashPage() {
 
   useEffect(() => {
     if (step === 'logo') {
-      // 피그마 인터랙션 명세: SPLASH / 02 표시 후 0.8초 대기 후 HOME으로 전환
+      // 피그마 인터랙션 명세: SPLASH / 02 표시 후 0.8초 대기 후 온보딩으로 전환
       const timer = setTimeout(() => {
-        handleNavigateToHome()
+        handleNavigateToOnboarding()
       }, 800)
       return () => clearTimeout(timer)
     }
-  }, [step, handleNavigateToHome])
+  }, [step, handleNavigateToOnboarding])
 
   return (
     <div
-      onClick={handleNavigateToHome}
+      onClick={handleNavigateToOnboarding}
       className="relative w-full h-full flex-1 flex items-center justify-center bg-[#FEFEFE] cursor-pointer select-none"
       role="button"
       tabIndex={0}
-      aria-label="스플래시 화면 (클릭 시 홈으로 이동)"
+      aria-label="스플래시 화면 (클릭 시 온보딩으로 이동)"
     >
       {step === 'video' ? (
         <div className="w-[100px] h-[100px] flex items-center justify-center transition-opacity duration-300">

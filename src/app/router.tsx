@@ -6,6 +6,14 @@ import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { SplashPage } from '../pages/SplashPage'
+import {
+  MeasurementActivePage,
+  MeasurementGuidePage,
+  MeasurementResultPage,
+  OnboardingExperiencePage,
+  OnboardingIntroPage,
+  OnboardingPermissionsPage,
+} from '../pages/onboarding/OnboardingPages'
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +27,30 @@ export const router = createBrowserRouter([
       {
         path: 'home',
         element: <HomePage />,
+      },
+      {
+        path: 'onboarding',
+        element: <OnboardingIntroPage />,
+      },
+      {
+        path: 'onboarding/experience',
+        element: <OnboardingExperiencePage />,
+      },
+      {
+        path: 'onboarding/permissions',
+        element: <OnboardingPermissionsPage />,
+      },
+      {
+        path: 'onboarding/measurement',
+        element: <MeasurementGuidePage />,
+      },
+      {
+        path: 'onboarding/measurement/active',
+        element: <MeasurementActivePage />,
+      },
+      {
+        path: 'onboarding/measurement/result',
+        element: <MeasurementResultPage />,
       },
       {
         path: 'running',
@@ -45,3 +77,4 @@ export const router = createBrowserRouter([
 ])
 
 export default router
+
