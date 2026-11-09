@@ -138,7 +138,7 @@ export function BottomNavigation() {
   return (
     <nav
       aria-label="하단 네비게이션"
-      className="fixed bottom-[calc(16px+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[366px] h-[70px] bg-[#1E1E22] rounded-[35px] shadow-[0_8px_30px_rgba(0,0,0,0.2)] z-50"
+      className="absolute bottom-[calc(16px+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[366px] h-[70px] bg-[#1E1E22] rounded-[35px] shadow-[0_8px_30px_rgba(0,0,0,0.2)] z-50"
     >
       <div className="flex items-center justify-around h-full px-2">
         {NAV_ITEMS.map((item) => {
