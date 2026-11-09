@@ -2,6 +2,7 @@
 
 @theme {
   --font-pretendard: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  --font-poppins: Poppins, "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --color-lime-brand: #c6f135;
   --color-app-bg: #fefefe;
   --color-nav-bg: #1e1e22;
@@ -16,9 +17,7 @@
   --safe-right: env(safe-area-inset-right, 0px);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html,
 body {
@@ -33,6 +32,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
 }
+
+.font-poppins { font-family: var(--font-poppins); }
 
 #root {
   width: 100%;

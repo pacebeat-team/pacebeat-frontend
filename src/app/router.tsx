@@ -6,40 +6,29 @@ import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { SplashPage } from '../pages/SplashPage'
+import {
+  ProfileBodyPage,
+  ProfileConsentPage,
+  ProfileDemographicsPage,
+  ProfileNicknamePage,
+} from '../pages/profile/ProfilePages'
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
     children: [
-      {
-        index: true,
-        element: <SplashPage />,
-      },
-      {
-        path: 'home',
-        element: <HomePage />,
-      },
-      {
-        path: 'running',
-        element: <RunningPage />,
-      },
-      {
-        path: 'records',
-        element: <RecordsPage />,
-      },
-      {
-        path: 'growth',
-        element: <GrowthPage />,
-      },
-      {
-        path: 'my',
-        element: <MyPage />,
-      },
-      {
-        path: '*',
-        element: <Navigate to="/home" replace />,
-      },
+      { index: true, element: <SplashPage /> },
+      { path: 'home', element: <HomePage /> },
+      { path: 'profile/consent', element: <ProfileConsentPage /> },
+      { path: 'profile/nickname', element: <ProfileNicknamePage /> },
+      { path: 'profile/demographics', element: <ProfileDemographicsPage /> },
+      { path: 'profile/body', element: <ProfileBodyPage /> },
+      { path: 'running', element: <RunningPage /> },
+      { path: 'records', element: <RecordsPage /> },
+      { path: 'growth', element: <GrowthPage /> },
+      { path: 'my', element: <MyPage /> },
+      { path: '*', element: <Navigate to="/home" replace /> },
     ],
   },
 ])
