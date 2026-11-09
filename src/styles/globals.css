@@ -2,6 +2,7 @@
 
 @theme {
   --font-pretendard: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  --font-poppins: Poppins, "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --color-lime-brand: #c6f135;
   --color-app-bg: #fefefe;
   --color-nav-bg: #1e1e22;
@@ -34,6 +35,10 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+.font-poppins {
+  font-family: var(--font-poppins);
+}
+
 #root {
   width: 100%;
   min-height: 100dvh;
@@ -43,3 +48,4 @@ body {
   background-color: #f0f0f0;
   padding: 12px 8px;
 }
+
