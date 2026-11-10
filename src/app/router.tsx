@@ -6,6 +6,7 @@ import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { SplashPage } from '../pages/SplashPage'
+import { ResultDetailsPage, ResultGoalPage, ResultPartialPage } from '../pages/result/ResultPages'
 
 export const router = createBrowserRouter([
   {
@@ -23,6 +24,22 @@ export const router = createBrowserRouter([
       {
         path: 'running',
         element: <RunningPage />,
+      },
+      {
+        path: 'result',
+        element: <ResultGoalPage />,
+      },
+      {
+        path: 'result/details',
+        element: <ResultDetailsPage />,
+      },
+      {
+        path: 'result/reflection',
+        element: <ResultGoalPage initialReflectionOpen />,
+      },
+      {
+        path: 'result/partial',
+        element: <ResultPartialPage />,
       },
       {
         path: 'records',
@@ -45,3 +62,5 @@ export const router = createBrowserRouter([
 ])
 
 export default router
+
+

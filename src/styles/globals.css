@@ -1,7 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @theme {
   --font-pretendard: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  --font-poppins: "Poppins", "Pretendard Variable", Pretendard, sans-serif;
   --color-lime-brand: #c6f135;
   --color-app-bg: #fefefe;
   --color-nav-bg: #1e1e22;
@@ -34,6 +36,65 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+.font-poppins {
+  font-family: var(--font-poppins);
+}
+
+.result-screen {
+  animation: result-dissolve-in 150ms ease-out both;
+}
+
+.result-mascot-reveal {
+  animation: result-mascot-reveal 400ms ease-in-out 800ms both;
+}
+
+.result-confetti-reveal {
+  animation: result-confetti-reveal 400ms ease-in-out 800ms both;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 150ms;
+  animation-timing-function: ease-out;
+}
+
+@keyframes result-dissolve-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes result-mascot-reveal {
+  from { transform: translate(8px, 101.5px) rotate(8.77deg); }
+  to { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes result-confetti-reveal {
+  from {
+    left: var(--confetti-from-left);
+    top: var(--confetti-from-top);
+    transform: rotate(var(--confetti-from-rotation));
+  }
+  to {
+    left: var(--confetti-to-left);
+    top: var(--confetti-to-top);
+    transform: rotate(var(--confetti-to-rotation));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-screen {
+    animation-duration: 1ms;
+  }
+
+  .result-mascot-reveal,
+  .result-confetti-reveal,
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}
+
 #root {
   width: 100%;
   min-height: 100dvh;
@@ -43,3 +104,5 @@ body {
   background-color: #f0f0f0;
   padding: 12px 8px;
 }
+
+
