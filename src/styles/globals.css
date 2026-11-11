@@ -1,11 +1,69 @@
 @import "tailwindcss";
 
+/*
+ * P!PACE 디자인 시스템 폰트 (온보딩 이후 화면에서 사용).
+ * 기존 화면에 영향이 없도록 기존 'Pretendard' 이름과 분리해 별도 family로 등록한다.
+ * 폰트 스택은 --font-pace(Poppins → Pretendard)로, Latin/숫자는 Poppins, 한글은 Pretendard로 렌더링된다.
+ */
+@font-face {
+  font-family: "PacePoppins";
+  font-weight: 300;
+  font-display: swap;
+  src: url("../assets/fonts/Poppins-Light.ttf") format("truetype");
+}
+@font-face {
+  font-family: "PacePoppins";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/Poppins-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "PacePoppins";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/Poppins-Medium.ttf") format("truetype");
+}
+@font-face {
+  font-family: "PacePoppins";
+  font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/Poppins-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "PacePretendard";
+  font-weight: 300;
+  font-display: swap;
+  src: url("../assets/fonts/Pretendard-Light.otf") format("opentype");
+}
+@font-face {
+  font-family: "PacePretendard";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/Pretendard-Regular.otf") format("opentype");
+}
+@font-face {
+  font-family: "PacePretendard";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/Pretendard-Medium.otf") format("opentype");
+}
+
 @theme {
   --font-pretendard: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   --color-lime-brand: #c6f135;
   --color-app-bg: #fefefe;
   --color-nav-bg: #1e1e22;
   --color-nav-inactive: #8e8e93;
+
+  /* Figma 디자인 토큰 (온보딩) */
+  --font-pace: "PacePoppins", "PacePretendard", "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --color-ink: #111111;
+  --color-muted: #626174;
+  --color-soft: #f4f4f6;
+  --color-line: #dedee5;
+  --color-lime: #c4fa3f;
+  --color-disabled-surface: #e7e8e3;
+  --color-disabled-text: #74766f;
 }
 
 :root {
