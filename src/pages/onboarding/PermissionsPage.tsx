@@ -11,7 +11,7 @@ import { StepIndicator } from '../../components/onboarding/StepIndicator'
 import { checkMotionFitnessSupport, requestLocationPermission } from '../../lib/permissions'
 import { useOnboardingStore } from '../../stores/onboardingStore'
 
-// TODO: 측정 Guide 화면이 구현되면 해당 경로로 교체한다. (이동 목적지 미확정)
+// !!!측정 Guide 화면이 구현되면 해당 경로로 교체!!! (이동 목적지 미확정)
 const NEXT_PATH = '/home'
 
 export function PermissionsPage() {
@@ -28,7 +28,7 @@ export function PermissionsPage() {
     if (isRequesting) return
     setIsRequesting(true)
 
-    // 위치 권한을 요청하고, 허용/거부 어느 쪽이든 다음 단계로 이동한다. (거부 시 시간 전용 상태 저장)
+    // 위치 권한을 요청하고, 허용/거부 어느 쪽이든 다음 단계로 이동 
     const locationPermission = await requestLocationPermission()
     setLocationPermission(locationPermission)
     setMotionFitnessSupport(checkMotionFitnessSupport())
@@ -37,7 +37,7 @@ export function PermissionsPage() {
   }, [isRequesting, navigate, setLocationPermission, setMotionFitnessSupport])
 
   const handleSkip = useCallback(() => {
-    // "나중에 할게요": 권한을 요청하지 않으므로 저장값은 null로 유지한다.
+    // "나중에 할게요": 권한을 요청하지 않으므로 저장값은 null로 유지
     navigate(NEXT_PATH, { replace: true })
   }, [navigate])
 
