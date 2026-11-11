@@ -47,7 +47,8 @@ export function PermissionsPage() {
     // 대기 중에 사용자가 건너뛰거나 뒤로 이동했다면 저장과 이동을 하지 않는다.
     if (!isActiveRef.current) return
 
-    setLocationPermission(locationPermission)
+    // 판단 불가(null)는 기존에 저장된 허용/거부 값을 덮어쓰지 않는다.
+    if (locationPermission !== null) setLocationPermission(locationPermission)
     setMotionFitnessSupport(checkMotionFitnessSupport())
 
     navigate(NEXT_PATH, { replace: true })
