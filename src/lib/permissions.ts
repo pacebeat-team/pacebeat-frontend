@@ -1,19 +1,35 @@
 import type { LocationPermission, MotionFitnessSupport } from '../types/onboarding'
 
+// 앱이 위치 권한 응답을 기다리는 최대 시간(ms).
+const LOCATION_REQUEST_TIMEOUT_MS = 15000
+
 // 위치 권한을 브라우저에 요청한다. (Geolocation API)
 // - 허용: 'granted' / 거부: 'denied'
 // - 권한과 무관한 오류(위치 확인 실패, 타임아웃)는 허용/거부를 판단할 수 없으므로 null을 반환한다.
+// - 응답이 없어도 LOCATION_REQUEST_TIMEOUT_MS 이후에는 null로 끝난다.
+//   이 제한은 앱의 "대기"만 종료한다. 브라우저 권한 팝업 자체는 앱에서 닫거나 취소할 수 없어서
+//   팝업은 남아 있을 수 있고, 이후 도착하는 응답은 이 함수의 결과에 반영되지 않는다.
 export function requestLocationPermission(): Promise<LocationPermission> {
   return new Promise((resolve) => {
+    let isSettled = false
+    const settle = (result: LocationPermission) => {
+      if (isSettled) return
+      isSettled = true
+      window.clearTimeout(timerId)
+      resolve(result)
+    }
+
+    const timerId = window.setTimeout(() => settle(null), LOCATION_REQUEST_TIMEOUT_MS)
+
     if (!('geolocation' in navigator)) {
       // Geolocation 자체를 쓸 수 없으면 위치 없이(시간 전용) 달리는 경우와 같게 취급한다.
-      resolve('denied')
+      settle('denied')
       return
     }
 
     navigator.geolocation.getCurrentPosition(
-      () => resolve('granted'),
-      (error) => resolve(error.code === error.PERMISSION_DENIED ? 'denied' : null),
+      () => settle('granted'),
+      (error) => settle(error.code === error.PERMISSION_DENIED ? 'denied' : null),
       { timeout: 10000 },
     )
   })

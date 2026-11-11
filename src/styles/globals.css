@@ -2,7 +2,8 @@
 
 /*
  * P!PACE 디자인 시스템 폰트 (온보딩 이후 화면에서 사용).
- * 기존 화면에 영향이 없도록 기존 'Pretendard' 이름과 분리해 별도 family로 등록한다.
+ * Poppins는 로컬 파일을 별도 family(PacePoppins)로 등록한다.
+ * Pretendard는 index.html의 CDN이 이미 제공하므로 로컬 파일을 중복으로 싣지 않고 그대로 사용한다.
  * 폰트 스택은 --font-pace(Poppins → Pretendard)로, Latin/숫자는 Poppins, 한글은 Pretendard로 렌더링된다.
  */
 @font-face {
@@ -29,24 +30,6 @@
   font-display: swap;
   src: url("../assets/fonts/Poppins-Bold.ttf") format("truetype");
 }
-@font-face {
-  font-family: "PacePretendard";
-  font-weight: 300;
-  font-display: swap;
-  src: url("../assets/fonts/Pretendard-Light.otf") format("opentype");
-}
-@font-face {
-  font-family: "PacePretendard";
-  font-weight: 400;
-  font-display: swap;
-  src: url("../assets/fonts/Pretendard-Regular.otf") format("opentype");
-}
-@font-face {
-  font-family: "PacePretendard";
-  font-weight: 500;
-  font-display: swap;
-  src: url("../assets/fonts/Pretendard-Medium.otf") format("opentype");
-}
 
 @theme {
   --font-pretendard: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
@@ -56,7 +39,7 @@
   --color-nav-inactive: #8e8e93;
 
   /* Figma 디자인 토큰 (온보딩) */
-  --font-pace: "PacePoppins", "PacePretendard", "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-pace: "PacePoppins", Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --color-ink: #111111;
   --color-muted: #626174;
   --color-soft: #f4f4f6;

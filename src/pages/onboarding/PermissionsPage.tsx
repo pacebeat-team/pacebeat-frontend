@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import running from '../../assets/icons/running.svg'
 import signal from '../../assets/icons/signal.svg'
@@ -20,7 +20,19 @@ export function PermissionsPage() {
   const setLocationPermission = useOnboardingStore((state) => state.setLocationPermission)
   const setMotionFitnessSupport = useOnboardingStore((state) => state.setMotionFitnessSupport)
 
+  // 이 화면이 아직 유효한지 추적한다. 건너뛰기/뒤로 가기/언마운트 후 늦게 도착한
+  // 권한 응답으로 저장이나 페이지 이동이 일어나지 않게 하기 위함이다.
+  const isActiveRef = useRef(false)
+
+  useEffect(() => {
+    isActiveRef.current = true
+    return () => {
+      isActiveRef.current = false
+    }
+  }, [])
+
   const handleBack = useCallback(() => {
+    isActiveRef.current = false
     navigate('/onboarding/experience')
   }, [navigate])
 
@@ -29,7 +41,12 @@ export function PermissionsPage() {
     setIsRequesting(true)
 
     // 위치 권한을 요청하고, 허용/거부 어느 쪽이든 다음 단계로 이동한다. (거부 시 시간 전용 상태 저장)
+    // 응답이 없으면 일정 시간 뒤 null로 끝나며, 이 경우에도 다음 단계로 이동한다.
     const locationPermission = await requestLocationPermission()
+
+    // 대기 중에 사용자가 건너뛰거나 뒤로 이동했다면 저장과 이동을 하지 않는다.
+    if (!isActiveRef.current) return
+
     setLocationPermission(locationPermission)
     setMotionFitnessSupport(checkMotionFitnessSupport())
 
@@ -38,6 +55,8 @@ export function PermissionsPage() {
 
   const handleSkip = useCallback(() => {
     // "나중에 할게요": 권한을 요청하지 않으므로 저장값은 null로 유지한다.
+    // 이미 진행 중인 권한 요청은 취소할 수 없지만, 이후 도착하는 응답은 무시한다.
+    isActiveRef.current = false
     navigate(NEXT_PATH, { replace: true })
   }, [navigate])
 
@@ -102,7 +121,7 @@ export function PermissionsPage() {
           disabled={isRequesting}
           onClick={handleContinue}
         />
-        <TextButton label="나중에 할게요" disabled={isRequesting} onClick={handleSkip} />
+        <TextButton label="나중에 할게요" onClick={handleSkip} />
       </footer>
     </div>
   )
