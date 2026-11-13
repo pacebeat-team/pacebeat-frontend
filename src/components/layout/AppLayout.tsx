@@ -10,7 +10,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation()
   const isSplash = location.pathname === '/'
   const isOnboarding = location.pathname.startsWith('/onboarding')
-  const hideNavigation = isSplash || isOnboarding
+  const isMeasurement = location.pathname.startsWith('/measurement')
+  const hideNavigation = isSplash || isOnboarding || isMeasurement
 
   return (
     <div
