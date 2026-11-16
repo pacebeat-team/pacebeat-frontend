@@ -120,3 +120,70 @@ export interface GpsTrackerState {
 export type GpsProcessResult =
   | { readonly accepted: true; readonly fix: ValidFix }
   | { readonly accepted: false; readonly reason: RejectReason }
+
+// ---------------------------------------------------------------------------
+// 러닝 지표 (거리, 유효 측정 시간, 속도, 페이스)
+// 검증을 통과한 좌표(ValidFix)만 입력으로 받는다. 실제 GPS와 가상 데이터가 같은 경로를 쓴다.
+// ---------------------------------------------------------------------------
+
+// 직전에 반영한 좌표. 다음 좌표와 쌍을 이룰 때 쓴다.
+export interface MetricsPoint {
+  readonly lat: number
+  readonly lng: number
+  // 세션 시간 기준의 시각(ValidFix.at)
+  readonly at: number
+}
+
+// 이어진 좌표 쌍 하나(from → to 구간)의 이동 거리. 현재 페이스 창 계산에 쓴다.
+export interface MetricsPair {
+  readonly from: number
+  readonly to: number
+  readonly distanceM: number
+}
+
+export interface MetricsState {
+  // 이어서 계산할 수 있는 직전 좌표. 새 구간이 시작되기 전(첫 좌표 전, 일시정지 중)에는 null
+  readonly lastFix: MetricsPoint | null
+  // 이어진 좌표 쌍의 거리 합(m)
+  readonly distanceM: number
+  // 유효 측정 시간(ms): 이어진 좌표 쌍의 시간 합
+  readonly validMs: number
+  // 현재 페이스 창 안에 걸치는 최근 좌표 쌍들(오래된 것은 버린다)
+  readonly recent: readonly MetricsPair[]
+}
+
+// ⚠️ 모든 값은 확정된 정책이 아니라 제안값이다. 실기기 확인과 기획 확정 후 조정한다.
+export interface MetricsConfig {
+  // 현재 페이스를 계산하는 최근 구간의 길이(ms). 마지막 좌표 시각에서 거꾸로 잰다.
+  readonly currentPaceWindowMs: number
+  // 현재 페이스에 필요한 창 안의 최소 유효 측정 시간(ms)
+  readonly currentPaceMinValidMs: number
+  // 평균 페이스에 필요한 최소 누적 거리(m)
+  readonly avgPaceMinDistanceM: number
+  // 평균 페이스에 필요한 최소 유효 측정 시간(ms)
+  readonly avgPaceMinValidMs: number
+  // 이 속도(m/s) 미만이면 페이스를 계산하지 않는다(null).
+  readonly minPaceSpeedMps: number
+  // 마지막 좌표 이후 이 시간(ms)을 넘기면 GPS가 끊긴 것으로 보고 현재 페이스를 계산하지 않는다.
+  // (GpsConfig.connectGapMs와 같은 기준)
+  readonly gpsLostAfterMs: number
+}
+
+// 값을 구할 수 없으면 0이 아니라 null이다.
+export interface MeasurementMetrics {
+  // 경과 시간(ms): 수동 일시정지를 뺀 시간. GPS가 끊긴 시간도 포함한다.
+  readonly elapsedMs: number
+  // 유효 측정 시간(ms): 이어진 좌표 쌍으로 확인된 시간
+  readonly validMs: number
+  // 미측정 시간(ms) = 경과 시간 − 유효 측정 시간.
+  // GPS가 끊긴 시간이 아니다. GPS 끊김뿐 아니라 첫 좌표를 기다린 시간, 검증에서 버려진 좌표 때문에
+  // 비어 있는 시간, 이어지지 않은 구간 사이처럼 좌표 쌍으로 확인하지 못한 모든 시간이 들어 있다.
+  readonly unmeasuredMs: number
+  readonly distanceM: number
+  // 평균 속도(m/s) = 거리 ÷ 유효 측정 시간
+  readonly avgSpeedMps: number | null
+  // 평균 페이스(sec/km, 정수) = 유효 측정 시간 ÷ 거리
+  readonly avgPaceSecPerKm: number | null
+  readonly currentSpeedMps: number | null
+  readonly currentPaceSecPerKm: number | null
+}
