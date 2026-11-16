@@ -11,14 +11,15 @@ import { StepIndicator } from '../../components/onboarding/StepIndicator'
 import { checkMotionFitnessSupport, requestLocationPermission } from '../../lib/permissions'
 import { useOnboardingStore } from '../../stores/onboardingStore'
 
-// !!!측정 Guide 화면이 구현되면 해당 경로로 교체!!! (이동 목적지 미확정)
-const NEXT_PATH = '/home'
+// 권한 안내를 마치면(허용, 거부, 나중에 모두) 기초 측정 Guide로 이동한다.
+const NEXT_PATH = '/measurement/guide'
 
 export function PermissionsPage() {
   const navigate = useNavigate()
   const [isRequesting, setIsRequesting] = useState(false)
   const setLocationPermission = useOnboardingStore((state) => state.setLocationPermission)
   const setMotionFitnessSupport = useOnboardingStore((state) => state.setMotionFitnessSupport)
+  const completeOnboarding = useOnboardingStore((state) => state.completeOnboarding)
 
   // 이 화면이 아직 유효한지 추적한다. 건너뛰기/뒤로 가기/언마운트 후 늦게 도착한
   // 권한 응답으로 저장이나 페이지 이동이 일어나지 않게 하기 위함이다.
@@ -50,16 +51,18 @@ export function PermissionsPage() {
     // 판단 불가(null)는 기존에 저장된 허용/거부 값을 덮어쓰지 않는다.
     if (locationPermission !== null) setLocationPermission(locationPermission)
     setMotionFitnessSupport(checkMotionFitnessSupport())
+    completeOnboarding()
 
     navigate(NEXT_PATH, { replace: true })
-  }, [isRequesting, navigate, setLocationPermission, setMotionFitnessSupport])
+  }, [completeOnboarding, isRequesting, navigate, setLocationPermission, setMotionFitnessSupport])
 
   const handleSkip = useCallback(() => {
     // "나중에 할게요": 권한을 요청하지 않으므로 저장값은 null로 유지
     // 이미 진행 중인 권한 요청은 취소할 수 없지만, 이후 도착하는 응답은 무시한다.
     isActiveRef.current = false
+    completeOnboarding()
     navigate(NEXT_PATH, { replace: true })
-  }, [navigate])
+  }, [completeOnboarding, navigate])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace">
