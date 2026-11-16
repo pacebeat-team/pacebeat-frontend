@@ -5,6 +5,7 @@ import type { GeolocationEnv, GpsSource } from '../features/measurement/geolocat
 import { applyGpsError, createGpsTracker, processFix } from '../features/measurement/gpsTracker.ts'
 import { addFix, createMetrics } from '../features/measurement/metrics.ts'
 import {
+  getElapsedMs,
   isSessionActive,
   pauseSession,
   resumeSession,
@@ -29,13 +30,16 @@ import type { VirtualScenarioId } from '../features/measurement/virtualScenarios
 // - 계산은 하지 않는다. 경과 시간, 지표, GPS 상태 같은 파생값은 저장하지 않고 화면 쪽(toMeasurementView)에서
 //   엔진 함수로 그때그때 구한다. 이 Store는 원본 상태(session, tracker, metrics)와 현재 시각(now)만 가진다.
 // - 실제 GPS와 가상 GPS는 같은 createGeolocationSource를 거친다. 다른 점은 geolocation 객체뿐이다.
-// - 목표 시간에 의한 자동 종료는 없다(목표 설정 단계에서 추가). 종료는 사용자 종료, 가상 시나리오 완료뿐이다.
+// - 종료는 사용자 종료, 가상 시나리오 완료, 실제 GPS 측정의 목표 시간(10분) 도달 세 가지이다.
+//   목표 시간은 실제 GPS 측정에만 적용하고, 일시정지한 시간은 세지 않는다. 가상 측정은 시나리오가 끝나면 끝난다.
 // - 세션, 좌표 시각, 공급원은 모두 같은 시계(deps.clock, 기본 Date.now)를 쓴다.
-// - 저장하지 않는다(새로고침하면 사라진다).
 
 export type RunSource =
   | { readonly kind: 'real' }
   | { readonly kind: 'virtual'; readonly scenarioId: VirtualScenarioId }
+
+// 실제 GPS 측정의 목표(기초 측정) 시간. 일시정지 시간을 뺀 경과 시간이 이만큼 되면 자동 종료한다.
+export const REAL_TARGET_DURATION_MS = 600_000
 
 export interface StartOptions {
   // 있으면 이 가상 시나리오로 측정하고, 없으면 실제 GPS를 쓴다.
@@ -50,6 +54,8 @@ export interface MeasurementData {
   readonly now: number
   // 이번(또는 마지막) 측정의 데이터 출처. 측정한 적이 없으면 null
   readonly runSource: RunSource | null
+  // 이번(또는 마지막) 측정의 목표 시간(ms). 목표가 없는 측정(가상)이거나 측정한 적이 없으면 null
+  readonly targetDurationMs: number | null
 }
 
 export interface MeasurementActions {
@@ -114,6 +120,7 @@ const INITIAL_DATA: Omit<MeasurementData, 'now'> = {
   tracker: createGpsTracker(),
   metrics: createMetrics(),
   runSource: null,
+  targetDurationMs: null,
 }
 
 export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_CLOCK }) {
@@ -123,6 +130,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
   let source: GpsSource | null = null
   let cancelTick: (() => void) | null = null
   let cancelLeave: (() => void) | null = null
+  let cancelTarget: (() => void) | null = null
   // 이전 측정의 늦은 콜백이 새 측정에 섞이지 않는 것은 다른 장치가 보장한다:
   // 공급원은 stop() 뒤 콜백을 무시하고(geolocationSource), 가상 공급원은 clearWatch 때 완료 예약을 취소한다.
 
@@ -138,6 +146,33 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
       cancelTick = null
     }
 
+    function stopTarget(): void {
+      cancelTarget?.()
+      cancelTarget = null
+    }
+
+    // 목표 시간 도달 예약. 측정 중(running)일 때만 걸고, 남은 시간 = 목표 − (일시정지를 뺀) 경과 시간이다.
+    // 일시정지하면 취소하고 재개할 때 남은 시간으로 다시 건다.
+    function armTarget(): void {
+      stopTarget()
+      const { session, targetDurationMs } = get()
+      if (session === null || session.status !== 'running' || targetDurationMs === null) {
+        return
+      }
+      const remaining = targetDurationMs - getElapsedMs(session, clock.now())
+      cancelTarget = clock.schedule(() => {
+        cancelTarget = null
+        const current = get().session
+        if (current === null || current.status !== 'running') {
+          return
+        }
+        // 타이머가 늦게 불려도 종료 시각은 목표 시각에 맞춘다(경과 시간이 목표를 넘지 않게).
+        const now = clock.now()
+        const over = getElapsedMs(current, now) - targetDurationMs
+        finish('auto', over > 0 ? now - over : now)
+      }, Math.max(0, remaining))
+    }
+
     function startTick(): void {
       cancelTick = clock.schedule(() => {
         cancelTick = null
@@ -151,15 +186,16 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
 
     // 세션을 끝내고 공급원과 타이머를 정리한다. 사용자 종료와 가상 완료가 모두 이 한 곳을 지나므로
     // 어느 쪽이든 같은 종료 상태(status 'finished')가 만들어진다.
-    function finish(reason: SessionEndReason): void {
+    function finish(reason: SessionEndReason, endAt: number = clock.now()): void {
       const session = get().session
       if (session === null || session.status === 'finished') {
         return
       }
-      const ended = stopSession(session, clock.now(), reason)
+      const ended = stopSession(session, endAt, reason)
       set({ session: ended, now: ended.endedAt ?? clock.now() })
       stopSource()
       stopTick()
+      stopTarget()
     }
 
     // 좌표 한 개: 검증 → (통과하면) 지표 반영을 한 번의 갱신으로 한다. 예외를 던지지 않는다.
@@ -221,6 +257,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         cancelLeave = null
         stopSource()
         stopTick()
+        stopTarget()
 
         const now = clock.now()
         const runSource: RunSource =
@@ -236,7 +273,9 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
           metrics: createMetrics(),
           now,
           runSource,
+          targetDurationMs: runSource.kind === 'real' ? REAL_TARGET_DURATION_MS : null,
         })
+        armTarget()
         startTick()
         source = createSource(runSource)
         source.start()
@@ -250,6 +289,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         // GPS 감시는 계속 켜 둔다. 일시정지 중의 좌표는 metrics가 반영하지 않는다.
         const now = clock.now()
         set({ session: pauseSession(session, now), now })
+        stopTarget()
       },
 
       resume: () => {
@@ -259,6 +299,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         }
         const now = clock.now()
         set({ session: resumeSession(session, now), now })
+        armTarget()
       },
 
       stop: () => finish('user'),

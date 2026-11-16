@@ -461,13 +461,166 @@ describe('실제 GPS 측정 (같은 엔진 경로)', () => {
     assert.equal(store.getState().metrics.distanceM, 0)
   })
 
-  test('실제 GPS 측정은 시간이 얼마나 지나도 자동 종료되지 않는다', () => {
+})
+
+describe('실제 GPS 측정의 10분 자동 종료', () => {
+  const TARGET = 600_000
+
+  test('목표 시간은 실제 측정만 600초이고 가상 측정과 측정 전은 null이다', () => {
+    const { store } = setup()
+    assert.equal(store.getState().targetDurationMs, null)
+    store.getState().start(virtual('steady'))
+    assert.equal(store.getState().targetDurationMs, null)
+    const real = setupReal()
+    real.store.getState().start()
+    assert.equal(real.store.getState().targetDurationMs, TARGET)
+  })
+
+  test('600초에 auto로 종료되고 경과 시간은 정확히 600초이며 감시와 타이머가 정리된다', () => {
     const { clock, geo, store } = setupReal()
     store.getState().start()
     geo.emitRunnerAt(0)
-    clock.advance(3_600_000)
+    clock.advanceTo(599)
     assert.equal(store.getState().session?.status, 'running')
-    assert.equal(getGpsStatus(store.getState().tracker, store.getState().now), 'lost')
+    clock.advanceTo(600)
+    const session = store.getState().session
+    assert.equal(session?.status, 'finished')
+    assert.equal(session?.endReason, 'auto')
+    assert.equal(session?.endedAt, BASE + TARGET)
+    assert.equal(metricsOf(store).elapsedMs, TARGET)
+    assert.equal(geo.activeWatches, 0)
+    assert.equal(clock.pending, 0)
+  })
+
+  test('종료 후에는 시간이 지나도 결과가 바뀌지 않는다', () => {
+    const { clock, store } = setupReal()
+    store.getState().start()
+    clock.advance(TARGET)
+    const ended = store.getState().session
+    clock.advance(3_600_000)
+    assert.equal(store.getState().session, ended)
+    assert.equal(metricsOf(store).elapsedMs, TARGET)
+  })
+
+  test('일시정지한 시간은 세지 않는다 (5분, 3분 정지, 5분 뒤 종료)', () => {
+    const { clock, store } = setupReal()
+    store.getState().start()
+    clock.advance(300_000)
+    store.getState().pause()
+    assert.equal(clock.pending, 1) // 틱 1개만 남는다 (목표 타이머는 취소됨)
+    clock.advance(180_000)
+    assert.equal(store.getState().session?.status, 'paused')
+    store.getState().resume()
+    clock.advance(299_999)
+    assert.equal(store.getState().session?.status, 'running')
+    clock.advance(1)
+    assert.equal(store.getState().session?.endReason, 'auto')
+    assert.equal(metricsOf(store).elapsedMs, TARGET)
+    assert.equal(store.getState().session?.endedAt, BASE + 780_000)
+  })
+
+  test('여러 번 일시정지해도 남은 시간으로 다시 예약한다', () => {
+    const { clock, store } = setupReal()
+    store.getState().start()
+    for (let i = 0; i < 4; i += 1) {
+      clock.advance(100_000)
+      store.getState().pause()
+      clock.advance(50_000)
+      store.getState().resume()
+    }
+    assert.equal(store.getState().session?.status, 'running')
+    clock.advance(199_999)
+    assert.equal(store.getState().session?.status, 'running')
+    clock.advance(1)
+    assert.equal(store.getState().session?.endReason, 'auto')
+    assert.equal(metricsOf(store).elapsedMs, TARGET)
+  })
+
+  test('일시정지 중에 사용자가 종료하면 user로 남고 타이머가 남지 않는다', () => {
+    const { clock, store } = setupReal()
+    store.getState().start()
+    clock.advance(10_000)
+    store.getState().pause()
+    store.getState().stop()
+    assert.equal(store.getState().session?.endReason, 'user')
+    clock.advance(TARGET * 2)
+    assert.equal(store.getState().session?.endReason, 'user')
+    assert.equal(clock.pending, 0)
+  })
+
+  test('사용자 종료와 화면 이탈 종료 뒤에는 목표 타이머가 남지 않는다', () => {
+    const a = setupReal()
+    a.store.getState().start()
+    a.clock.advance(1000)
+    a.store.getState().stop()
+    assert.equal(a.clock.pending, 0)
+
+    const b = setupReal()
+    b.store.getState().start()
+    b.store.getState().scheduleLeaveStop()
+    b.clock.advance(0)
+    assert.equal(b.store.getState().session?.endReason, 'user')
+    assert.equal(b.clock.pending, 0)
+  })
+
+  test('종료 후 새 측정을 시작하면 목표 시간을 처음부터 다시 센다 (타이머가 겹치지 않는다)', () => {
+    const { clock, store } = setupReal()
+    store.getState().start()
+    clock.advance(100_000)
+    store.getState().stop()
+    store.getState().start()
+    clock.advance(TARGET - 1)
+    assert.equal(store.getState().session?.status, 'running')
+    clock.advance(1)
+    assert.equal(store.getState().session?.endReason, 'auto')
+    assert.equal(clock.pending, 0)
+  })
+
+  test('중복 start는 목표 타이머를 다시 걸지 않는다', () => {
+    const { clock, store } = setupReal()
+    store.getState().start()
+    clock.advance(200_000)
+    store.getState().start()
+    clock.advance(TARGET - 200_000)
+    assert.equal(store.getState().session?.endReason, 'auto')
+    assert.equal(metricsOf(store).elapsedMs, TARGET)
+  })
+
+  test('위치를 쓸 수 없는 환경(시간만 측정)에서도 10분에 자동 종료된다', () => {
+    const { clock, store } = setup(() => ({ isSecureContext: false, geolocation: null }))
+    store.getState().start()
+    clock.advance(TARGET)
+    assert.equal(store.getState().session?.endReason, 'auto')
+    assert.equal(clock.pending, 0)
+  })
+
+  test('타이머가 늦게 불려도 종료 시각은 목표 시각이다 (경과 시간이 600초를 넘지 않는다)', () => {
+    // 백그라운드 탭처럼 1초 이상의 타이머가 5초 늦게 불리는 시계
+    class LateClock extends ManualClock {
+      override schedule(callback: () => void, delayMs: number): () => void {
+        return super.schedule(callback, delayMs >= 1000 ? delayMs + 5000 : delayMs)
+      }
+    }
+    const clock = new LateClock(BASE)
+    const store = createMeasurementStore({
+      clock,
+      realEnv: () => ({ isSecureContext: true, geolocation: createFakeGeolocation(clock).geolocation }),
+    })
+    store.getState().start()
+    clock.advance(TARGET + 5000)
+    const session = store.getState().session
+    assert.equal(session?.endReason, 'auto')
+    assert.equal(session?.endedAt, BASE + TARGET)
+    assert.equal(metricsOf(store).elapsedMs, TARGET)
+  })
+
+  test('가상 측정은 10분 타이머 없이 시나리오 완료로만 끝난다', () => {
+    const { clock, store } = setup()
+    store.getState().start(virtual('steady'))
+    assert.equal(clock.pending, 2) // 틱 1개 + 가상 감시 1개 (목표 타이머 없음)
+    clock.advance(180_000)
+    assert.equal(store.getState().session?.endReason, 'auto')
+    assert.equal(store.getState().session?.endedAt, BASE + 180_000)
   })
 })
 

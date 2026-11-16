@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { SessionStatus } from '../measurement/types'
-import { measurementStore, parseUrlMode, useMeasurementStore } from '../../stores/measurementStore'
+import { measurementStore, parseUrlMode, REAL_TARGET_DURATION_MS, useMeasurementStore } from '../../stores/measurementStore'
 import type { UrlMode } from '../../stores/measurementStore'
 import { getMockMeasurementView } from './mockData'
 import { toMeasurementView } from './toMeasurementView'
@@ -31,12 +31,16 @@ export function useMeasurementView(): MeasurementViewResult {
   const tracker = useMeasurementStore((state) => state.tracker)
   const metrics = useMeasurementStore((state) => state.metrics)
   const now = useMeasurementStore((state) => state.now)
+  const runTargetDurationMs = useMeasurementStore((state) => state.targetDurationMs)
+  // 측정 전(Guide)에는 이번 모드로 시작했을 때의 목표를, 측정 중과 후에는 Store가 정한 목표를 보여 준다.
+  const targetDurationMs =
+    session === null ? (mode.virtual === null ? REAL_TARGET_DURATION_MS : null) : runTargetDurationMs
   // Mock 모드는 엔진을 쓰지 않으므로 "그만하기"를 눌렀는지만 이 훅 안에서 기억한다.
   const [mockStopped, setMockStopped] = useState(false)
 
   const view = useMemo(
-    () => (mode.mock ? getMockMeasurementView() : toMeasurementView({ session, tracker, metrics, now })),
-    [mode.mock, session, tracker, metrics, now],
+    () => (mode.mock ? getMockMeasurementView() : toMeasurementView({ session, tracker, metrics, now, targetDurationMs })),
+    [mode.mock, session, tracker, metrics, now, targetDurationMs],
   )
 
   const start = useCallback(() => {
