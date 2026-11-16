@@ -45,7 +45,8 @@ export function ResultPage() {
   }, [])
 
   const handleHome = useCallback(() => {
-    navigate('/home')
+    // 결과 화면을 기록에서 교체한다. 홈에서 뒤로 가기를 눌러도 결과 화면으로 돌아오지 않는다.
+    navigate('/home', { replace: true })
   }, [navigate])
 
   // "예시 측정 · 품질 양호 · GPS 안정" (예시 표기는 예시 데이터일 때만)
