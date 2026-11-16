@@ -17,8 +17,8 @@ interface ProfileActions {
   setProfile: (patch: Partial<ProfileData>) => void
   // 동의 항목(필수 4개와 선택 1개)만 바꾼다. 버전과 시각은 recordConsent로 기록한다.
   setConsent: (patch: Partial<Record<ConsentKey, boolean>>) => void
-  // 동의 시점의 약관 버전과 시각을 기록한다.
-  recordConsent: (policyVersion: string, now?: number) => void
+  // 동의 시점의 약관 버전과 시각을 기록한다. 약관 버전이 확정되기 전에는 null을 넘겨도 시각은 기록된다.
+  recordConsent: (policyVersion: string | null, now?: number) => void
   // 프로필과 동의를 모두 초기화한다.
   reset: () => void
 }

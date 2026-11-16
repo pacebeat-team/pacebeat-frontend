@@ -108,6 +108,29 @@ describe('동의', () => {
     assert.equal(consent.ageOver14, true)
   })
 
+  test('recordConsent는 약관 버전이 null이어도 동의 시각을 기록한다', () => {
+    const { storage, map } = createFakeStorage()
+    const store = createProfileStore(storage)
+    store.getState().setConsent({ ageOver14: true, privacyPolicy: true })
+    store.getState().recordConsent(null, 1_700_000_000_000)
+    const { consent } = store.getState()
+    assert.equal(consent.policyVersion, null)
+    assert.equal(consent.consentedAt, 1_700_000_000_000)
+    assert.equal(consent.ageOver14, true)
+    assert.equal(consent.privacyPolicy, true)
+    // 저장과 복원도 정상이다
+    assert.equal(savedState(map).consent.consentedAt, 1_700_000_000_000)
+    assert.equal(createProfileStore(storage).getState().consent.consentedAt, 1_700_000_000_000)
+  })
+
+  test('recordConsent는 이전에 기록된 버전을 null로 덮어쓸 수 있다', () => {
+    const store = createProfileStore(createFakeStorage().storage)
+    store.getState().recordConsent('v1', 1)
+    store.getState().recordConsent(null, 2)
+    assert.equal(store.getState().consent.policyVersion, null)
+    assert.equal(store.getState().consent.consentedAt, 2)
+  })
+
   test('recordConsent의 시각 기본값은 현재 시각이다', () => {
     const store = createProfileStore(createFakeStorage().storage)
     const before = Date.now()
