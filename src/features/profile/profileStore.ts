@@ -66,23 +66,86 @@ function createMemoryStorage(): StateStorage {
   }
 }
 
+// 저장소 쓰기·삭제가 실패해도 예외를 던지지 않는다. (용량 초과 등) 메모리 상태는 그대로 유지되고 저장만 건너뛴다.
+// 읽기 실패는 persist가 이미 처리해 초기 상태로 시작한다.
+function withSafeWrites(storage: StateStorage): StateStorage {
+  function guard(run: () => unknown): unknown {
+    try {
+      const result = run()
+      if (result instanceof Promise) return result.catch(() => undefined)
+    } catch {
+      // 저장 실패는 무시한다.
+    }
+  }
+  return {
+    getItem: (name) => storage.getItem(name),
+    setItem: (name, value) => guard(() => storage.setItem(name, value)),
+    removeItem: (name) => guard(() => storage.removeItem(name)),
+  }
+}
+
+// 값이 undefined인 필드를 뺀다. undefined를 넘겨도 기존 값은 유지된다. (미입력은 null로 표현한다.)
+function withoutUndefined<T extends object>(patch: T): Partial<T> {
+  return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as Partial<T>
+}
+
+type FieldCheck = (value: unknown) => boolean
+
+const isNumberOrNull: FieldCheck = (value) => value === null || typeof value === 'number'
+const isStringOrNull: FieldCheck = (value) => value === null || typeof value === 'string'
+const isBoolean: FieldCheck = (value) => typeof value === 'boolean'
+
+// 저장된 값의 필드별 타입 검사. 맞지 않는 필드는 기본값으로 되돌린다.
+const PROFILE_FIELD_CHECKS: Record<keyof ProfileData, FieldCheck> = {
+  nickname: (value) => typeof value === 'string',
+  birthYear: isNumberOrNull,
+  gender: (value) => value === null || value === 'female' || value === 'male',
+  heightCm: isNumberOrNull,
+  weightKg: isNumberOrNull,
+}
+
+const CONSENT_FIELD_CHECKS: Record<keyof ConsentData, FieldCheck> = {
+  ageOver14: isBoolean,
+  termsOfService: isBoolean,
+  privacyPolicy: isBoolean,
+  locationTerms: isBoolean,
+  marketing: isBoolean,
+  policyVersion: isStringOrNull,
+  consentedAt: isNumberOrNull,
+}
+
+// 기본값 위에 저장된 값을 얹는다. 빠졌거나 타입이 맞지 않는 필드는 기본값을 쓰고, 맞는 필드는 그대로 둔다.
+function restoreFields<T extends object>(defaults: T, saved: unknown, checks: Record<keyof T, FieldCheck>): T {
+  if (!isRecord(saved)) return defaults
+  const restored = { ...defaults }
+  for (const key of Object.keys(checks) as (keyof T)[]) {
+    const value = saved[key as string]
+    if (checks[key](value)) restored[key] = value as T[keyof T]
+  }
+  return restored
+}
+
 // storage를 주입하면 테스트에서 가짜 저장소를 쓸 수 있다. 생략하면 브라우저 localStorage를 쓴다.
 export function createProfileStore(storage?: StateStorage) {
-  const resolved = storage ?? getBrowserStorage() ?? createMemoryStorage()
+  const resolved = withSafeWrites(storage ?? getBrowserStorage() ?? createMemoryStorage())
 
   return createStore<ProfileState>()(
     persist(
       (set) => ({
         ...createInitialData(),
         setProfile: (patch) =>
-          set((state) => ({
-            profile: {
-              ...state.profile,
-              ...patch,
-              ...(patch.nickname === undefined ? {} : { nickname: normalizeNickname(patch.nickname) }),
-            },
-          })),
-        setConsent: (patch) => set((state) => ({ consent: { ...state.consent, ...patch } })),
+          set((state) => {
+            const changes = withoutUndefined(patch)
+            return {
+              profile: {
+                ...state.profile,
+                ...changes,
+                ...(changes.nickname === undefined ? {} : { nickname: normalizeNickname(changes.nickname) }),
+              },
+            }
+          }),
+        setConsent: (patch) =>
+          set((state) => ({ consent: { ...state.consent, ...withoutUndefined(patch) } })),
         recordConsent: (policyVersion, now = Date.now()) =>
           set((state) => ({ consent: { ...state.consent, policyVersion, consentedAt: now } })),
         reset: () => set(createInitialData()),
@@ -91,13 +154,13 @@ export function createProfileStore(storage?: StateStorage) {
         name: PROFILE_STORAGE_KEY,
         storage: createJSONStorage(() => resolved),
         partialize: (state): ProfileStateData => ({ profile: state.profile, consent: state.consent }),
-        // 저장된 값에 빠진 필드가 있어도 기본값으로 채운다. profile과 consent를 각각 합친다.
+        // 저장된 값에 빠졌거나 타입이 맞지 않는 필드는 기본값으로 채운다. profile과 consent를 각각 복원한다.
         merge: (persisted, current) => {
           const saved = isRecord(persisted) ? persisted : {}
           return {
             ...current,
-            profile: { ...current.profile, ...(isRecord(saved.profile) ? saved.profile : {}) },
-            consent: { ...current.consent, ...(isRecord(saved.consent) ? saved.consent : {}) },
+            profile: restoreFields(current.profile, saved.profile, PROFILE_FIELD_CHECKS),
+            consent: restoreFields(current.consent, saved.consent, CONSENT_FIELD_CHECKS),
           }
         },
       },

@@ -239,3 +239,171 @@ describe('저장과 복원', () => {
     assert.deepEqual([...map.keys()].sort(), ['pacebeat-measurement', 'pacebeat-onboarding', PROFILE_STORAGE_KEY])
   })
 })
+
+describe('저장소 쓰기 실패', () => {
+  function createFailingStorage(initial: Record<string, string> = {}) {
+    const { storage } = createFakeStorage(initial)
+    const failing: StateStorage = {
+      getItem: storage.getItem,
+      setItem: () => {
+        throw new Error('QuotaExceededError')
+      },
+      removeItem: () => {
+        throw new Error('SecurityError')
+      },
+    }
+    return failing
+  }
+
+  test('setItem이 던져도 모든 액션이 예외 없이 끝나고 메모리 상태는 바뀐다', () => {
+    const store = createProfileStore(createFailingStorage())
+    assert.doesNotThrow(() => store.getState().setProfile({ nickname: '희규', heightCm: 165 }))
+    assert.doesNotThrow(() => store.getState().setConsent({ ageOver14: true }))
+    assert.doesNotThrow(() => store.getState().recordConsent(null, 5))
+    assert.equal(store.getState().profile.nickname, '희규')
+    assert.equal(store.getState().profile.heightCm, 165)
+    assert.equal(store.getState().consent.ageOver14, true)
+    assert.equal(store.getState().consent.consentedAt, 5)
+    assert.doesNotThrow(() => store.getState().reset())
+    assert.equal(store.getState().profile.nickname, '')
+  })
+
+  test('쓰기가 실패해도 저장된 값 복원은 정상이다', () => {
+    const failing = createFailingStorage({
+      [PROFILE_STORAGE_KEY]: JSON.stringify({ state: { profile: { nickname: '희규' } }, version: 0 }),
+    })
+    const store = createProfileStore(failing)
+    assert.equal(store.getState().profile.nickname, '희규')
+    assert.doesNotThrow(() => store.getState().setProfile({ birthYear: 2003 }))
+    assert.equal(store.getState().profile.birthYear, 2003)
+  })
+
+  test('비동기 setItem이 reject돼도 예외가 전파되지 않는다', async () => {
+    const { storage } = createFakeStorage()
+    const store = createProfileStore({
+      ...storage,
+      setItem: () => Promise.reject(new Error('async fail')),
+    })
+    assert.doesNotThrow(() => store.getState().setProfile({ nickname: '희규' }))
+    await new Promise((resolve) => setImmediate(resolve)) // 처리되지 않은 reject가 있으면 테스트가 실패한다
+    assert.equal(store.getState().profile.nickname, '희규')
+  })
+
+  test('한 Store의 저장 실패가 다른 저장소를 쓰는 Store에 영향을 주지 않는다', () => {
+    const failingStore = createProfileStore(createFailingStorage())
+    const { storage, map } = createFakeStorage()
+    const okStore = createProfileStore(storage)
+    failingStore.getState().setProfile({ nickname: '실패' })
+    okStore.getState().setProfile({ nickname: '정상' })
+    assert.equal(savedState(map).profile.nickname, '정상')
+  })
+})
+
+describe('저장값 필드 타입 검증', () => {
+  function restore(state: unknown) {
+    const { storage } = createFakeStorage({ [PROFILE_STORAGE_KEY]: JSON.stringify({ state, version: 0 }) })
+    return createProfileStore(storage).getState()
+  }
+
+  test('타입이 틀린 profile 필드만 기본값으로 복원하고 정상 필드는 보존한다', () => {
+    const { profile } = restore({
+      profile: { nickname: null, birthYear: 2003, gender: 'x', heightCm: '165', weightKg: 52.5 },
+    })
+    assert.deepEqual(profile, { nickname: '', birthYear: 2003, gender: null, heightCm: null, weightKg: 52.5 })
+  })
+
+  test('타입이 틀린 consent 필드만 기본값으로 복원하고 정상 필드는 보존한다', () => {
+    const { consent } = restore({
+      consent: {
+        ageOver14: true,
+        termsOfService: 'yes',
+        privacyPolicy: 1,
+        locationTerms: true,
+        marketing: null,
+        policyVersion: 3,
+        consentedAt: '2026-11-17',
+      },
+    })
+    assert.equal(consent.ageOver14, true)
+    assert.equal(consent.termsOfService, false)
+    assert.equal(consent.privacyPolicy, false)
+    assert.equal(consent.locationTerms, true)
+    assert.equal(consent.marketing, false)
+    assert.equal(consent.policyVersion, null)
+    assert.equal(consent.consentedAt, null)
+  })
+
+  test('허용되는 값(null, 성별 두 값, 문자열 버전, 숫자 시각)은 그대로 복원한다', () => {
+    const state = restore({
+      profile: { nickname: '희규', birthYear: null, gender: 'male', heightCm: 0, weightKg: null },
+      consent: { ageOver14: true, policyVersion: 'v1', consentedAt: 7 },
+    })
+    assert.deepEqual(state.profile, { nickname: '희규', birthYear: null, gender: 'male', heightCm: 0, weightKg: null })
+    assert.equal(state.consent.policyVersion, 'v1')
+    assert.equal(state.consent.consentedAt, 7)
+    assert.equal(restore({ profile: { gender: 'female' } }).profile.gender, 'female')
+  })
+
+  test('profile과 consent의 오류가 서로 영향을 주지 않는다', () => {
+    const state = restore({ profile: 'broken', consent: { marketing: true } })
+    assert.equal(state.profile.nickname, '')
+    assert.equal(state.consent.marketing, true)
+  })
+
+  test('복원된 닉네임은 항상 문자열이다', () => {
+    for (const bad of [null, 123, true, {}, []]) {
+      assert.equal(typeof restore({ profile: { nickname: bad } }).profile.nickname, 'string')
+    }
+  })
+})
+
+describe('undefined 패치', () => {
+  test('setProfile의 undefined 필드는 무시하고 기존 값을 유지한다', () => {
+    const store = createProfileStore(createFakeStorage().storage)
+    store.getState().setProfile({ nickname: '희규', birthYear: 2003, gender: 'female', heightCm: 165, weightKg: 52 })
+    store.getState().setProfile({ heightCm: undefined, nickname: undefined, gender: undefined })
+    assert.deepEqual(store.getState().profile, {
+      nickname: '희규',
+      birthYear: 2003,
+      gender: 'female',
+      heightCm: 165,
+      weightKg: 52,
+    })
+  })
+
+  test('setProfile은 정상 값과 null 업데이트를 기존대로 처리한다', () => {
+    const store = createProfileStore(createFakeStorage().storage)
+    store.getState().setProfile({ heightCm: 165, nickname: ' 희규 ' })
+    store.getState().setProfile({ heightCm: null, weightKg: 0, birthYear: undefined })
+    assert.equal(store.getState().profile.heightCm, null)
+    assert.equal(store.getState().profile.weightKg, 0)
+    assert.equal(store.getState().profile.birthYear, null)
+    assert.equal(store.getState().profile.nickname, '희규')
+  })
+
+  test('setProfile의 undefined가 저장값에도 영향을 주지 않는다', () => {
+    const { storage, map } = createFakeStorage()
+    const store = createProfileStore(storage)
+    store.getState().setProfile({ heightCm: 165 })
+    store.getState().setProfile({ heightCm: undefined })
+    assert.equal(savedState(map).profile.heightCm, 165)
+    assert.equal(createProfileStore(storage).getState().profile.heightCm, 165)
+  })
+
+  test('setConsent의 undefined 항목은 무시하고 기존 값을 유지한다', () => {
+    const store = createProfileStore(createFakeStorage().storage)
+    store.getState().setConsent({ marketing: true, ageOver14: true })
+    store.getState().setConsent({ marketing: undefined, termsOfService: true })
+    const { consent } = store.getState()
+    assert.equal(consent.marketing, true)
+    assert.equal(consent.ageOver14, true)
+    assert.equal(consent.termsOfService, true)
+  })
+
+  test('setConsent는 false 업데이트를 기존대로 처리한다', () => {
+    const store = createProfileStore(createFakeStorage().storage)
+    store.getState().setConsent({ marketing: true })
+    store.getState().setConsent({ marketing: false })
+    assert.equal(store.getState().consent.marketing, false)
+  })
+})
