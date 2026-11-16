@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import mascot from '../../assets/images/mascot-p.png'
 import music from '../../assets/icons/music.svg'
@@ -15,7 +15,7 @@ import {
   PLACEHOLDER,
 } from '../../features/measurementView/format'
 import type { GpsStatus } from '../../features/measurementView/types'
-import { useMeasurementView } from '../../features/measurementView/useMeasurementView'
+import { useMeasurementView, useStopOnLeave } from '../../features/measurementView/useMeasurementView'
 
 // TODO: Figma에는 "GPS 양호"만 디자인되어 있다. 나머지 상태의 문구는 임시이며 디자인 확인이 필요하다.
 const GPS_LABELS: Record<GpsStatus, string> = {
@@ -27,14 +27,27 @@ const GPS_LABELS: Record<GpsStatus, string> = {
 
 export function ActivePage() {
   const navigate = useNavigate()
-  const { view, actions } = useMeasurementView()
+  const { view, actions, isVirtual, sessionStatus } = useMeasurementView()
   const { active } = view
 
+  // 측정 화면을 떠날 때 진행 중인 측정을 정리한다. (뒤로가기 등)
+  useStopOnLeave()
+
+  // 화면 이동은 이 effect 한 곳에서만 한다. 사용자 종료와 가상 시나리오 완료는 모두 세션이 종료 상태가 되는 것으로
+  // 나타나므로, 어느 쪽이든 여기서 Result로 이동한다. (replace라서 개발 환경 StrictMode의 이중 실행에도 안전하다.)
+  // 세션이 없으면(주소로 직접 진입, 새로고침) 측정할 것이 없으므로 Guide로 보낸다.
+  useEffect(() => {
+    if (sessionStatus === 'finished') {
+      navigate('/measurement/result', { replace: true })
+    } else if (sessionStatus === null) {
+      navigate('/measurement/guide', { replace: true })
+    }
+  }, [sessionStatus, navigate])
+
   const handleStop = useCallback(() => {
-    // Figma: 확인 없이 Result로 이동한다. (종료 확인 팝업 필요 여부는 기획 확인 필요)
+    // Figma: 확인 없이 종료한다. (종료 확인 팝업 필요 여부는 기획 확인 필요) 이동은 위 effect가 한다.
     actions.stop()
-    navigate('/measurement/result', { replace: true })
-  }, [actions, navigate])
+  }, [actions])
 
   const progress = getProgressRatio(active.elapsedSec, active.targetDurationSec)
   const minSave = formatWholeMinutes(active.minSaveSec)
@@ -45,7 +58,9 @@ export function ActivePage() {
         {/* 측정 상태와 GPS 상태 */}
         <div className="flex h-[36px] items-center gap-[10px]">
           <img src={stateActive} alt="" className="size-[7px] shrink-0" aria-hidden="true" />
-          <p className="min-w-0 flex-1 text-[17px] font-medium leading-6 text-ink">기초 측정 중</p>
+          <p className="min-w-0 flex-1 text-[17px] font-medium leading-6 text-ink">
+            기초 측정 중{isVirtual && ' · 가상 데이터'}
+          </p>
           <p className="text-[13px] leading-5 text-ink">
             GPS {active.gpsStatus ? GPS_LABELS[active.gpsStatus] : PLACEHOLDER}
           </p>

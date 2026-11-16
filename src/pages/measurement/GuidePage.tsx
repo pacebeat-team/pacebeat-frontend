@@ -9,7 +9,7 @@ import { useMeasurementView } from '../../features/measurementView/useMeasuremen
 
 export function GuidePage() {
   const navigate = useNavigate()
-  const { view, actions } = useMeasurementView()
+  const { view, actions, isVirtual } = useMeasurementView()
   const minutes = formatWholeMinutes(view.guide.targetDurationSec)
 
   const handleBack = useCallback(() => {
@@ -76,10 +76,20 @@ export function GuidePage() {
               2
             </span>
             <div className="flex min-w-0 flex-col gap-1">
+              {/* 측정 시간이 정해져 있으면(Figma 시안, Mock) 시안 문구 그대로. 정해져 있지 않은 지금의 동작:
+                  실제 GPS는 직접 종료하고, 가상 측정만 시나리오가 끝나면 자동으로 끝난다. (문구는 임시, 디자인 확인 필요) */}
               <p className="text-[16px] font-medium leading-[24px] text-ink">
-                {minutes ?? '정해진 시간'}이 지나면 자동으로 끝나요
+                {minutes
+                  ? `${minutes}이 지나면 자동으로 끝나요`
+                  : isVirtual
+                    ? '가상 러닝이 끝나면 자동으로 마쳐요'
+                    : '그만하고 싶을 때 직접 끝내요'}
               </p>
-              <p className="text-[14px] leading-5 text-muted">중간에 그만둘 수도 있어요.</p>
+              <p className="text-[14px] leading-5 text-muted">
+                {minutes || isVirtual
+                  ? '중간에 그만둘 수도 있어요.'
+                  : '화면 아래 "측정 그만하기"를 눌러 주세요.'}
+              </p>
             </div>
           </li>
         </ol>
@@ -89,6 +99,13 @@ export function GuidePage() {
           <br />
           나에게 맞는 첫 목표를 추천받아요.
         </p>
+
+        {/* 가상 GPS로 측정할 때는 실제 측정이 아님을 미리 알린다. */}
+        {isVirtual && (
+          <p className="mt-3 text-[13px] leading-[18px] text-muted">
+            가상 데이터로 진행해요. 실제 위치는 사용하지 않아요.
+          </p>
+        )}
 
         {/* Figma의 시안 안내 문구이므로 예시 데이터일 때만 보여준다. */}
         {view.isSample && (

@@ -1,5 +1,5 @@
 import type { GeolocationLike, PositionErrorLike, PositionLike } from './geolocationSource.ts'
-import { generateVirtualRun } from './virtualRun.ts'
+import { generateVirtualRun, getVirtualRunDurationMs } from './virtualRun.ts'
 import type { VirtualEvent, VirtualScenario } from './virtualRun.ts'
 
 // 가짜 브라우저 위치(GeolocationLike): 가상 시나리오를 정해진 시각에 콜백으로 전달한다.
@@ -30,12 +30,24 @@ interface VirtualWatch {
   cancel: () => void
 }
 
+export interface VirtualGeolocationOptions {
+  // 시나리오의 마지막 사건을 전달하고 시나리오 길이도 지난 뒤 감시마다 한 번 호출한다.
+  // GPS 오류(onError)와는 별개의 신호다. clearWatch로 감시를 끝냈으면 호출하지 않는다.
+  readonly onComplete?: () => void
+}
+
 export function createVirtualGeolocation(
   scenario: VirtualScenario,
   clock: VirtualClock = SYSTEM_CLOCK,
+  options: VirtualGeolocationOptions = {},
 ): GeolocationLike {
   // 시나리오는 만들 때 한 번만 풀어 둔다. (잘못된 시나리오는 여기서 RangeError)
   const events: readonly VirtualEvent[] = generateVirtualRun(scenario)
+  // 끝난 시각: 마지막 사건 도착 시각과 시나리오 길이 중 늦은 쪽 (끝부분이 GPS 끊김이어도 길이만큼은 기다린다.)
+  const completeAtMs = Math.max(
+    getVirtualRunDurationMs(scenario),
+    events.length > 0 ? events[events.length - 1].deliverAtMs : 0,
+  )
   const watches = new Map<number, VirtualWatch>()
   let nextWatchId = 1
 
@@ -62,11 +74,18 @@ export function createVirtualGeolocation(
         }
       }
 
+      let completed = false
+
       const scheduleNext = (): void => {
-        if (index >= events.length) {
+        let dueAtMs: number
+        if (index < events.length) {
+          dueAtMs = events[index].deliverAtMs
+        } else if (!completed) {
+          dueAtMs = completeAtMs
+        } else {
           return
         }
-        const delayMs = Math.max(0, startedAt + events[index].deliverAtMs - clock.now())
+        const delayMs = Math.max(0, startedAt + dueAtMs - clock.now())
         watch.cancel = clock.schedule(fire, delayMs)
       }
 
@@ -82,6 +101,12 @@ export function createVirtualGeolocation(
             const event = events[index]
             index += 1
             deliver(event)
+          }
+          // 모든 사건을 전달했고 시나리오 길이도 지났으면 끝났음을 한 번만 알린다.
+          // (onComplete가 clearWatch를 불러도, 예외를 던져도 안전하다.)
+          if (watch.active && index >= events.length && !completed && elapsedMs >= completeAtMs) {
+            completed = true
+            options.onComplete?.()
           }
         } finally {
           if (watch.active) {

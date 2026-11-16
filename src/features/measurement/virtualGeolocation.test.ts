@@ -622,3 +622,159 @@ describe('실제 GPS 입력과 같은 경로를 쓴다', () => {
     assert.deepEqual(rig.metricsState, metrics)
   })
 })
+
+describe('가상 시나리오 완료 알림 (onComplete)', () => {
+  function watchWithComplete(scenario: VirtualScenario, clock: ManualClock) {
+    const completions: number[] = []
+    const positions: PositionLike[] = []
+    const geo = createVirtualGeolocation(scenario, clock, {
+      onComplete: () => completions.push(clock.now() - BASE),
+    })
+    const id = geo.watchPosition(
+      (position) => positions.push(position),
+      () => {},
+    )
+    return { geo, id, completions, positions }
+  }
+
+  test('마지막 좌표를 전달한 뒤 한 번만 호출한다 (3초 시나리오는 3초에)', () => {
+    const clock = new ManualClock(BASE)
+    const { completions, positions } = watchWithComplete(walk3, clock)
+    clock.advance(2999)
+    assert.equal(completions.length, 0)
+    clock.advance(1)
+    assert.equal(positions.length, 4)
+    assert.deepEqual(completions, [3000])
+    clock.advance(100_000)
+    assert.equal(completions.length, 1)
+    assert.equal(clock.pending, 0)
+  })
+
+  test('마지막 좌표가 전달된 뒤에 호출된다 (같은 시각이면 좌표가 먼저)', () => {
+    const clock = new ManualClock(BASE)
+    const order: string[] = []
+    createVirtualGeolocation(walk3, clock, { onComplete: () => order.push('complete') }).watchPosition(
+      () => order.push('fix'),
+      () => {},
+    )
+    clock.advance(3000)
+    assert.deepEqual(order, ['fix', 'fix', 'fix', 'fix', 'complete'])
+  })
+
+  test('끝부분이 GPS 끊김이어도 시나리오 길이가 지난 뒤에 호출한다', () => {
+    const clock = new ManualClock(BASE)
+    const scenario: VirtualScenario = {
+      motion: [{ kind: 'move', durationSec: 10, speedMps: 3 }],
+      conditions: [{ kind: 'gps-lost', fromSec: 6, toSec: 11 }],
+    }
+    const { completions, positions } = watchWithComplete(scenario, clock)
+    clock.advance(9999)
+    assert.equal(completions.length, 0)
+    clock.advance(1)
+    assert.equal(positions.length, 6)
+    assert.deepEqual(completions, [10_000])
+  })
+
+  test('수신 지연이 있으면 지연된 마지막 좌표 뒤에 호출한다', () => {
+    const clock = new ManualClock(BASE)
+    const { completions, positions } = watchWithComplete({ ...walk3, deliveryLagMs: 400 }, clock)
+    clock.advance(3399)
+    assert.equal(completions.length, 0)
+    clock.advance(1)
+    assert.equal(positions.length, 4)
+    assert.deepEqual(completions, [3400])
+  })
+
+  test('빈 시나리오는 곧바로(비동기로) 한 번 호출한다', () => {
+    const clock = new ManualClock(BASE)
+    const { completions } = watchWithComplete({ motion: [] }, clock)
+    assert.equal(completions.length, 0)
+    clock.advance(0)
+    assert.equal(completions.length, 1)
+  })
+
+  test('완료 전에 clearWatch하면 호출하지 않고 예약도 남지 않는다', () => {
+    const clock = new ManualClock(BASE)
+    const { geo, id, completions } = watchWithComplete(walk3, clock)
+    clock.advance(1500)
+    geo.clearWatch(id)
+    clock.advance(100_000)
+    assert.equal(completions.length, 0)
+    assert.equal(clock.pending, 0)
+  })
+
+  test('onComplete 안에서 clearWatch를 불러도 안전하다', () => {
+    const clock = new ManualClock(BASE)
+    let geo: ReturnType<typeof createVirtualGeolocation> | null = null
+    let calls = 0
+    geo = createVirtualGeolocation(walk3, clock, {
+      onComplete: () => {
+        calls += 1
+        geo?.clearWatch(1)
+      },
+    })
+    geo.watchPosition(
+      () => {},
+      () => {},
+    )
+    clock.advance(10_000)
+    assert.equal(calls, 1)
+    assert.equal(clock.pending, 0)
+  })
+
+  test('onComplete가 예외를 던져도 삼키지 않고, 다시 호출하지 않는다', () => {
+    const clock = new ManualClock(BASE)
+    let calls = 0
+    createVirtualGeolocation(walk3, clock, {
+      onComplete: () => {
+        calls += 1
+        throw new Error('완료 처리 실패')
+      },
+    }).watchPosition(
+      () => {},
+      () => {},
+    )
+    assert.throws(() => clock.advance(3000), /완료 처리 실패/)
+    clock.advance(10_000)
+    assert.equal(calls, 1)
+    assert.equal(clock.pending, 0)
+  })
+
+  test('감시마다 독립적으로 한 번씩 호출한다 (재시작하면 다시 처음부터)', () => {
+    const clock = new ManualClock(BASE)
+    let calls = 0
+    const geo = createVirtualGeolocation(walk3, clock, { onComplete: () => (calls += 1) })
+    const first = geo.watchPosition(
+      () => {},
+      () => {},
+    )
+    clock.advance(3000)
+    assert.equal(calls, 1)
+    geo.clearWatch(first)
+    geo.watchPosition(
+      () => {},
+      () => {},
+    )
+    clock.advance(3000)
+    assert.equal(calls, 2)
+  })
+
+  test('오류 사건(error 조건)은 완료가 아니다: 오류 뒤에도 시나리오 길이가 지나야 호출한다', () => {
+    const clock = new ManualClock(BASE)
+    const errors: number[] = []
+    let calls = 0
+    createVirtualGeolocation(
+      { motion: [{ kind: 'move', durationSec: 5, speedMps: 3 }], conditions: [{ kind: 'error', atSec: 2, code: 2 }] },
+      clock,
+      { onComplete: () => (calls += 1) },
+    ).watchPosition(
+      () => {},
+      (error) => errors.push(error.code),
+    )
+    clock.advance(2000)
+    assert.deepEqual(errors, [2])
+    assert.equal(calls, 0)
+    clock.advance(3000)
+    assert.equal(calls, 1)
+  })
+})

@@ -32,7 +32,7 @@ const GPS_RESULT_LABELS: Record<GpsStatus, string> = {
 
 export function ResultPage() {
   const navigate = useNavigate()
-  const { view } = useMeasurementView()
+  const { view, isVirtual } = useMeasurementView()
   const { result } = view
 
   const handleBack = useCallback(() => {
@@ -51,6 +51,7 @@ export function ResultPage() {
   // "예시 측정 · 품질 양호 · GPS 안정" (예시 표기는 예시 데이터일 때만)
   const qualityText = [
     view.isSample ? '예시 측정' : null,
+    isVirtual ? '가상 측정' : null,
     result.quality ? `품질 ${QUALITY_LABELS[result.quality]}` : '품질 정보 없음',
     result.gpsStatus ? `GPS ${GPS_RESULT_LABELS[result.gpsStatus]}` : null,
   ]
