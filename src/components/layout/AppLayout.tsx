@@ -31,7 +31,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   // 도착·완주 화면은 어두운 배경을 상태바 영역까지 채운다.
   const isDark = goalDone && (runPath === RUN_PATHS.arrival || runPath === RUN_PATHS.result)
   const isLime = runPath === RUN_PATHS.countdown || (runPath === RUN_PATHS.active && sessionStatus === 'running')
-  const hideNavigation = isSplash || isOnboarding || isMeasurement || isRunHidden
+  // '/profile'와 그 하위 경로('/profile/...')만 프로필 경로다. '/profiles', '/profile-x' 같은 경로는 포함하지 않는다.
+  const isProfile = location.pathname === '/profile' || location.pathname.startsWith('/profile/')
+  const hideNavigation = isSplash || isOnboarding || isMeasurement || isProfile || isRunHidden
 
   // 러닝 화면은 Figma 프레임(390x844, 상태바 44px 포함)과 같은 기하로 그린다.
   // - 테두리를 두지 않아 안쪽 폭이 390px이고, 좁은 화면(430px 이하)에서는 화면 전체를 채운다.

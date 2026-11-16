@@ -36,6 +36,13 @@ export function TermsSheet({ onClose }: TermsSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
+  // 최신 onClose를 ref로 들고 있다. 부모가 렌더링마다 새 함수를 넘겨도 아래 포커스 관리 effect는 다시 실행되지 않는다.
+  // (effect가 다시 실행되면 포커스가 닫기 버튼으로 되돌아가고 inert가 풀렸다 다시 걸린다.)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
   useEffect(() => {
     const root = rootRef.current
     if (!root) return
@@ -46,7 +53,7 @@ export function TermsSheet({ onClose }: TermsSheetProps) {
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab') return
@@ -74,7 +81,7 @@ export function TermsSheet({ onClose }: TermsSheetProps) {
       restoreOutside()
       previouslyFocused?.focus()
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div ref={rootRef} className="absolute inset-0 z-50 flex flex-col justify-end">

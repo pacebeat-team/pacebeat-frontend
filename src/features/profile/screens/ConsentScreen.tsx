@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CONSENT_ITEMS,
@@ -92,8 +92,15 @@ export function ConsentScreen() {
     else navigate(BACK_FALLBACK_PATH, { replace: true })
   }
 
+  // 저장에 성공한 뒤에는 다시 실행하지 않는다. 빠르게 여러 번 눌러도 저장과 이동은 한 번만 일어난다.
+  const submittedRef = useRef(false)
+
   function handleSubmit() {
-    if (submitConsent(profileStore.getState(), draft)) navigate(PROFILE_ROUTES.nickname)
+    if (submittedRef.current) return
+    if (submitConsent(profileStore.getState(), draft)) {
+      submittedRef.current = true
+      navigate(PROFILE_ROUTES.nickname)
+    }
   }
 
   function handleToggleItem(key: ConsentKey) {

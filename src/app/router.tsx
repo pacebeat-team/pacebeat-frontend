@@ -23,6 +23,9 @@ import { PermissionsPage } from '../pages/onboarding/PermissionsPage'
 import { GuidePage } from '../pages/measurement/GuidePage'
 import { ActivePage } from '../pages/measurement/ActivePage'
 import { ResultPage } from '../pages/measurement/ResultPage'
+import { ConsentScreen } from '../features/profile/screens/ConsentScreen'
+import { NicknameScreen } from '../features/profile/screens/NicknameScreen'
+import { PROFILE_ROUTES } from '../features/profile/routes'
 
 export const router = createBrowserRouter([
   {
@@ -50,6 +53,18 @@ export const router = createBrowserRouter([
           { path: 'active', element: <ActivePage /> },
           { path: 'result', element: <ResultPage /> },
         ],
+      },
+      {
+        path: 'profile',
+        element: <Navigate to={PROFILE_ROUTES.consent} replace />,
+      },
+      {
+        path: PROFILE_ROUTES.consent,
+        element: <ConsentScreen />,
+      },
+      {
+        path: PROFILE_ROUTES.nickname,
+        element: <NicknameScreen />,
       },
       {
         path: 'home',
