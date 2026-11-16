@@ -1,8 +1,9 @@
 import { computeBaselinePace } from '../measurement/baseline.ts'
 import { getGpsStatus } from '../measurement/gpsTracker.ts'
 import { getMetrics } from '../measurement/metrics.ts'
+import { isGpsReadyToResume } from '../measurement/restore.ts'
 import type { GpsTrackerState, MeasurementSession, MetricsState } from '../measurement/types.ts'
-import type { MeasurementView } from './types.ts'
+import type { MeasurementView, RestoreView } from './types.ts'
 
 // 측정 Store의 값을 화면이 읽는 MeasurementView로 바꾼다 (순수 함수).
 // - 계산은 하지 않는다. 엔진의 getMetrics / getGpsStatus 결과를 화면 모양에 맞출 뿐이다.
@@ -68,4 +69,21 @@ export function toMeasurementView(snapshot: MeasurementSnapshot): MeasurementVie
       firstGoal: null,
     },
   }
+}
+
+export interface RestoreSnapshot {
+  readonly session: MeasurementSession | null
+  readonly tracker: GpsTrackerState
+  readonly now: number
+  // Store: 새로고침으로 복원된 세션이 아직 재개되지 않았는가
+  readonly needsGpsReverify: boolean
+}
+
+// 새로고침 뒤 복원된(일시정지 상태의) 세션일 때만 값을 돌려주고, 아니면 null이다. 일반 측정에는 재개 UI를 보이지 않기 위해서이다.
+export function toRestoreView(snapshot: RestoreSnapshot): RestoreView | null {
+  const { session, tracker, now, needsGpsReverify } = snapshot
+  if (!needsGpsReverify || session === null || session.status !== 'paused') {
+    return null
+  }
+  return { canResume: isGpsReadyToResume(tracker, now) }
 }

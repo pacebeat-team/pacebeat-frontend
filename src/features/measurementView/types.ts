@@ -48,7 +48,15 @@ export interface MeasurementView {
 }
 
 // 화면이 호출하는 동작. 화면 이동은 화면이 직접 처리한다.
+// 새로고침으로 복원된 세션을 이어 달릴 수 있는 상태. 복원된 세션이 아니면 화면에 주어지지 않는다(null).
+export interface RestoreView {
+  // GPS가 다시 확인되어 지금 이어서 측정할 수 있는가
+  canResume: boolean
+}
+
 export interface MeasurementActions {
   start: () => void
   stop: () => void
+  // 복원된 세션을 이어서 측정한다. 복원된 세션이 아니거나 GPS가 확인되지 않았으면 아무 일도 없다.
+  resume: () => void
 }

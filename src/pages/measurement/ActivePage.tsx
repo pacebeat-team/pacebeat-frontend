@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import mascot from '../../assets/images/mascot-p.png'
 import music from '../../assets/icons/music.svg'
 import stateActive from '../../assets/icons/state-active.svg'
+import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { TextButton } from '../../components/common/TextButton'
 import { MetricBlock } from '../../components/measurement/MetricBlock'
 import {
@@ -15,7 +16,7 @@ import {
   PLACEHOLDER,
 } from '../../features/measurementView/format'
 import type { GpsStatus } from '../../features/measurementView/types'
-import { useMeasurementView, useStopOnLeave } from '../../features/measurementView/useMeasurementView'
+import { useAttachRestoredSession, useMeasurementView, useStopOnLeave } from '../../features/measurementView/useMeasurementView'
 
 // TODO: Figma에는 "GPS 양호"만 디자인되어 있다. 나머지 상태의 문구는 임시이며 디자인 확인이 필요하다.
 const GPS_LABELS: Record<GpsStatus, string> = {
@@ -27,11 +28,13 @@ const GPS_LABELS: Record<GpsStatus, string> = {
 
 export function ActivePage() {
   const navigate = useNavigate()
-  const { view, actions, isVirtual, sessionStatus } = useMeasurementView()
+  const { view, actions, isVirtual, sessionStatus, restore } = useMeasurementView()
   const { active } = view
 
   // 측정 화면을 떠날 때 진행 중인 측정을 정리한다. (뒤로가기 등)
   useStopOnLeave()
+  // 새로고침으로 복원된 세션이면 GPS 재확인을 시작한다.
+  useAttachRestoredSession()
 
   // 화면 이동은 이 effect 한 곳에서만 한다. 사용자 종료와 가상 시나리오 완료는 모두 세션이 종료 상태가 되는 것으로
   // 나타나므로, 어느 쪽이든 여기서 Result로 이동한다. (replace라서 개발 환경 StrictMode의 이중 실행에도 안전하다.)
@@ -59,7 +62,8 @@ export function ActivePage() {
         <div className="flex h-[36px] items-center gap-[10px]">
           <img src={stateActive} alt="" className="size-[7px] shrink-0" aria-hidden="true" />
           <p className="min-w-0 flex-1 text-[17px] font-medium leading-6 text-ink">
-            기초 측정 중{isVirtual && ' · 가상 데이터'}
+            {restore ? '기초 측정 일시정지' : '기초 측정 중'}
+            {isVirtual && ' · 가상 데이터'}
           </p>
           <p className="text-[13px] leading-5 text-ink">
             GPS {active.gpsStatus ? GPS_LABELS[active.gpsStatus] : PLACEHOLDER}
@@ -134,6 +138,15 @@ export function ActivePage() {
       </div>
 
       <footer className="flex flex-col px-3 pb-[9px] pt-2">
+        {/* 새로고침으로 복원된 세션만: GPS가 다시 확인된 뒤 사용자가 직접 이어간다. (TODO: Figma에 없는 상태라 문구는 임시) */}
+        {restore && (
+          <>
+            <p className="px-4 pb-2 text-[13px] leading-5 text-ink">
+              {restore.canResume ? 'GPS가 확인됐어요. 이어서 달릴 수 있어요.' : 'GPS가 확인되면 이어갈 수 있어요.'}
+            </p>
+            <PrimaryButton label="측정 이어가기" disabled={!restore.canResume} onClick={actions.resume} />
+          </>
+        )}
         <TextButton label="측정 그만하기" onClick={handleStop} />
         {/* 최소 저장 시간이 있을 때만 안내한다. "예시 기준"은 예시 데이터일 때만 붙인다. */}
         {minSave && (

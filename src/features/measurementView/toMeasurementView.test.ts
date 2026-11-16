@@ -4,7 +4,7 @@ import { createGpsTracker, processFix } from '../measurement/gpsTracker.ts'
 import { addFix, createMetrics } from '../measurement/metrics.ts'
 import { pauseSession, startSession, stopSession } from '../measurement/session.ts'
 import type { GpsTrackerState, MeasurementSession, MetricsState, RawFix } from '../measurement/types.ts'
-import { toMeasurementView } from './toMeasurementView.ts'
+import { toMeasurementView, toRestoreView } from './toMeasurementView.ts'
 
 const BASE = 1_700_000_000_000
 const METERS_PER_DEGREE = (Math.PI * 6_371_000) / 180
@@ -245,5 +245,34 @@ describe('toMeasurementView', () => {
       assert.equal(baselineOf(range(0, 300), 300).result.firstGoal, null)
       assert.equal(baselineOf(range(0, 300), 300).active.minSaveSec, null)
     })
+  })
+})
+
+describe('toRestoreView', () => {
+  const paused = pauseSession(session, BASE + 1000)
+  const base = { tracker: createGpsTracker(), now: BASE + 5000 }
+
+  test('복원된 세션이 아니면 null이다 (일반 측정, 세션 없음, 종료)', () => {
+    assert.equal(toRestoreView({ ...base, session, needsGpsReverify: false }), null)
+    assert.equal(toRestoreView({ ...base, session: paused, needsGpsReverify: false }), null)
+    assert.equal(toRestoreView({ ...base, session: null, needsGpsReverify: true }), null)
+    assert.equal(toRestoreView({ ...base, session: stopSession(session, BASE + 2000, 'user'), needsGpsReverify: true }), null)
+    assert.equal(toRestoreView({ ...base, session, needsGpsReverify: true }), null) // 진행 중이면 일시정지 상태가 아니다
+  })
+
+  test('복원된 일시정지 세션은 GPS 확인 전에는 canResume이 false이다', () => {
+    assert.deepEqual(toRestoreView({ ...base, session: paused, needsGpsReverify: true }), { canResume: false })
+  })
+
+  test('유효 좌표를 받았고 신호가 정상이면 canResume이 true이다', () => {
+    const { tracker } = run(session, [3, 4])
+    assert.deepEqual(toRestoreView({ tracker, now: BASE + 4500, session: paused, needsGpsReverify: true }), { canResume: true })
+  })
+
+  test('신호가 끊겼거나 사용할 수 없으면 canResume이 false이다', () => {
+    const { tracker } = run(session, [3, 4])
+    assert.deepEqual(toRestoreView({ tracker, now: BASE + 4000 + 10_001, session: paused, needsGpsReverify: true }), { canResume: false })
+    const denied = { ...createGpsTracker(), unavailableReason: 'permission-denied' as const }
+    assert.deepEqual(toRestoreView({ tracker: denied, now: BASE, session: paused, needsGpsReverify: true }), { canResume: false })
   })
 })

@@ -20,7 +20,8 @@ import type {
   RawFix,
   SessionEndReason,
 } from '../features/measurement/types.ts'
-import { getBrowserStorage, saveMeasurement } from '../features/measurement/sessionPersistence.ts'
+import { isGpsReadyToResume } from '../features/measurement/restore.ts'
+import { getBrowserStorage, loadMeasurement, saveMeasurement } from '../features/measurement/sessionPersistence.ts'
 import type { StorageLike } from '../features/measurement/sessionPersistence.ts'
 import { createVirtualGeolocation, SYSTEM_CLOCK } from '../features/measurement/virtualGeolocation.ts'
 import type { VirtualClock } from '../features/measurement/virtualGeolocation.ts'
@@ -37,7 +38,10 @@ import type { VirtualScenarioId } from '../features/measurement/virtualScenarios
 // - 세션, 좌표 시각, 공급원은 모두 같은 시계(deps.clock, 기본 Date.now)를 쓴다.
 // - 실제 GPS 측정만 저장한다(session과 metrics, localStorage). 시작, 일시정지, 재개, 종료 때와 측정 중 약 5초마다,
 //   그리고 saveNow()(화면을 떠날 때 등)에서 저장한다. 저장이 실패해도 측정과 Store 상태에는 영향이 없다.
-//   가상 측정은 storage를 읽지도, 쓰지도, 지우지도 않는다. (복원은 아직 없다)
+//   가상 측정은 storage를 읽지도, 쓰지도, 지우지도 않는다.
+// - 새로고침 복원: hydrate()가 저장된 실제 측정을 읽어 진행 중이던 세션은 "저장 시각에 일시정지"한 상태로 복원한다.
+//   (새로고침으로 비어 있던 시간은 일시정지로 처리되어 측정 시간에 들어가지 않는다.)
+//   복원된 세션(needsGpsReverify)은 GPS를 다시 확인한 뒤 사용자가 resume()해야 이어진다. GPS 확인은 attach()가 시작한다.
 
 export type RunSource =
   | { readonly kind: 'real' }
@@ -61,10 +65,13 @@ export interface MeasurementData {
   readonly runSource: RunSource | null
   // 이번(또는 마지막) 측정의 목표 시간(ms). 목표가 없는 측정(가상)이거나 측정한 적이 없으면 null
   readonly targetDurationMs: number | null
+  // 새로고침으로 복원된 진행 중 세션이 아직 재개되지 않았는가. 저장하지 않는 값이다.
+  readonly needsGpsReverify: boolean
 }
 
 export interface MeasurementActions {
   // 활성 세션이 있으면 아무 것도 하지 않는다(중복 시작 방지). 종료된 뒤에는 새 측정으로 초기화한다.
+  // 새로고침으로 복원된 세션(아직 재개 전)은 활성으로 보지 않고, 새 측정이 그 세션을 교체한다.
   start: (options?: StartOptions) => void
   pause: () => void
   resume: () => void
@@ -76,6 +83,12 @@ export interface MeasurementActions {
   cancelLeaveStop: () => void
   // 지금 상태를 바로 저장한다(실제 GPS 측정만). 페이지를 떠나기 직전(pagehide)에 부른다. 실패해도 아무 일도 없다.
   saveNow: () => void
+  // 앱 시작 때 한 번, 저장된 실제 측정을 복원한다. 이미 세션이 있거나 저장분이 없으면 아무 일도 없다.
+  hydrate: () => void
+  // 복원된 세션의 GPS 재확인을 시작한다(Active 화면이 열릴 때). 복원 세션이 아니면 아무 일도 없고, 여러 번 불러도 한 번만 시작한다.
+  attach: () => void
+  // 페이지를 떠나는 중(pagehide)이면 true. 이 동안에는 예약된 화면 이탈 종료를 실행하지 않아 새로고침이 세션을 끝내지 않는다.
+  setUnloading: (unloading: boolean) => void
 }
 
 export type MeasurementState = MeasurementData & MeasurementActions
@@ -132,6 +145,7 @@ const INITIAL_DATA: Omit<MeasurementData, 'now'> = {
   metrics: createMetrics(),
   runSource: null,
   targetDurationMs: null,
+  needsGpsReverify: false,
 }
 
 export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_CLOCK }) {
@@ -143,6 +157,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
   let cancelLeave: (() => void) | null = null
   let cancelTarget: (() => void) | null = null
   let lastSavedAt = 0
+  let unloading = false
   // 이전 측정의 늦은 콜백이 새 측정에 섞이지 않는 것은 다른 장치가 보장한다:
   // 공급원은 stop() 뒤 콜백을 무시하고(geolocationSource), 가상 공급원은 clearWatch 때 완료 예약을 취소한다.
 
@@ -204,7 +219,8 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
           return
         }
         set({ now: clock.now() })
-        if (clock.now() - lastSavedAt >= SAVE_INTERVAL_MS) {
+        // 주기 저장은 측정 중에만 한다. 일시정지 상태는 바뀌지 않았고, 다시 저장하면 저장 시각이 늘어난다.
+        if (get().session?.status === 'running' && clock.now() - lastSavedAt >= SAVE_INTERVAL_MS) {
           persist()
         }
         startTick()
@@ -219,7 +235,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         return
       }
       const ended = stopSession(session, endAt, reason)
-      set({ session: ended, now: ended.endedAt ?? clock.now() })
+      set({ session: ended, now: ended.endedAt ?? clock.now(), needsGpsReverify: false })
       stopSource()
       stopTick()
       stopTarget()
@@ -277,7 +293,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
       now: clock.now(),
 
       start: (options = {}) => {
-        if (isSessionActive(get().session)) {
+        if (isSessionActive(get().session) && !get().needsGpsReverify) {
           return
         }
         // 이전 측정이 남긴 정리 예약, 공급원, 타이머를 비운다.
@@ -302,6 +318,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
           now,
           runSource,
           targetDurationMs: runSource.kind === 'real' ? REAL_TARGET_DURATION_MS : null,
+          needsGpsReverify: false,
         })
         persist()
         armTarget()
@@ -328,7 +345,11 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
           return
         }
         const now = clock.now()
-        set({ session: resumeSession(session, now), now })
+        // 복원된 세션은 GPS가 다시 확인되기 전에는 재개하지 않는다.
+        if (get().needsGpsReverify && !isGpsReadyToResume(get().tracker, now)) {
+          return
+        }
+        set({ session: resumeSession(session, now), now, needsGpsReverify: false })
         armTarget()
         persist()
       },
@@ -339,7 +360,8 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         cancelLeave?.()
         cancelLeave = clock.schedule(() => {
           cancelLeave = null
-          if (isSessionActive(get().session)) {
+          // 페이지를 떠나는 중(새로고침, 탭 닫기)에는 종료하지 않는다. 화면 이동(SPA)일 때만 종료한다.
+          if (!unloading && isSessionActive(get().session)) {
             finish('user')
           }
         }, 0)
@@ -352,9 +374,50 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
 
       saveNow: () => {
         // 종료된 세션은 종료할 때 이미 저장했다. 다시 저장하면 저장 시각이 갱신되어 보관 기간이 늘어나므로 건너뛴다.
-        if (get().session?.status !== 'finished') {
+        if (get().session?.status === 'running') {
           persist()
         }
+      },
+
+      setUnloading: (value) => {
+        unloading = value
+      },
+
+      hydrate: () => {
+        if (get().session !== null) {
+          return
+        }
+        const now = clock.now()
+        const saved = loadMeasurement(deps.storage, now)
+        if (saved === null) {
+          return
+        }
+        const { session, metrics } = saved
+        const realSource: RunSource = { kind: 'real' }
+        const common = { tracker: createGpsTracker(), now, runSource: realSource }
+        if (session.status === 'finished') {
+          set({ ...common, session, metrics, targetDurationMs: REAL_TARGET_DURATION_MS, needsGpsReverify: false })
+          return
+        }
+        // 진행 중이던 세션은 저장 시각에 일시정지한 것으로 본다. 그 뒤 새로고침으로 비어 있던 시간은 세지 않는다.
+        // 직전 좌표와 최근 구간은 비워서, 재개 뒤 첫 좌표가 새 구간의 시작이 되게 한다. 누적 거리와 시간은 유지한다.
+        set({
+          ...common,
+          session: session.status === 'running' ? pauseSession(session, saved.savedAt) : session,
+          metrics: { ...metrics, lastFix: null, recent: [] },
+          targetDurationMs: REAL_TARGET_DURATION_MS,
+          needsGpsReverify: true,
+        })
+      },
+
+      attach: () => {
+        const { session, needsGpsReverify } = get()
+        if (!needsGpsReverify || !isSessionActive(session) || source !== null) {
+          return
+        }
+        startTick()
+        source = createSource({ kind: 'real' })
+        source.start()
       },
     }
   })

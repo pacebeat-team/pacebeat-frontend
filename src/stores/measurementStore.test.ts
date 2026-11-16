@@ -1277,3 +1277,391 @@ describe('가상 측정과 저장', () => {
     assert.equal(savedOf(fake.data).session.id, store.getState().session?.id)
   })
 })
+
+// ---------------------------------------------------------------------------
+// 새로고침 복원
+
+// 실제 측정을 seconds초 동안 3 m/s로 달리고 저장한 문자열(저장 시각 = BASE + seconds초)을 만든다.
+function savedRun(seconds = 10) {
+  const a = setupStored()
+  a.store.getState().start()
+  for (let sec = 0; sec <= seconds; sec += 1) a.geo.emitRunnerAt(sec)
+  a.store.getState().saveNow()
+  const raw = a.data.get(STORAGE_KEY)
+  if (raw === undefined) throw new Error('저장되지 않았다')
+  return { raw, sessionId: a.store.getState().session?.id }
+}
+
+// 앱을 다시 연 상황: 새 Store, 새 시계(저장 시각으로부터 afterMs 뒤), 같은 storage 내용. hydrate까지 한다.
+function setupRestored(raw: string, afterMs: number, seconds = 10) {
+  const clock = new ManualClock(BASE + seconds * 1000 + afterMs)
+  const geo = createFakeGeolocation(clock)
+  const fake = createFakeStorage({ [STORAGE_KEY]: raw })
+  const store = createMeasurementStore({
+    clock,
+    realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
+    storage: fake.storage,
+  })
+  store.getState().hydrate()
+  return { clock, geo, store, ...fake }
+}
+
+const MIN = 60_000
+
+describe('새로고침 복원 (hydrate)', () => {
+  test('진행 중이던 세션은 일시정지로 복원되고, 누적 시간과 거리가 저장 시점 그대로이다', () => {
+    const { raw, sessionId } = savedRun(10)
+    const { store, geo } = setupRestored(raw, 5 * MIN)
+    const state = store.getState()
+    assert.equal(state.session?.status, 'paused')
+    assert.equal(state.session?.id, sessionId)
+    assert.equal(state.needsGpsReverify, true)
+    assert.deepEqual(state.runSource, { kind: 'real' })
+    assert.equal(state.targetDurationMs, 600_000)
+    assertClose(metricsOf(store).distanceM, 30, 0.1)
+    assert.equal(metricsOf(store).elapsedMs, 10_000) // 새로고침으로 비어 있던 5분은 들어가지 않는다
+    assert.equal(geo.watchCalls, 0) // GPS는 아직 시작하지 않는다
+  })
+
+  test('복원 직후 직전 좌표와 최근 구간은 비워지고 tracker는 새로 만들어진다', () => {
+    const { raw } = savedRun(10)
+    const { store } = setupRestored(raw, MIN)
+    assert.equal(store.getState().metrics.lastFix, null)
+    assert.deepEqual(store.getState().metrics.recent, [])
+    assert.equal(store.getState().tracker.acceptedCount, 0)
+  })
+
+  test('복원은 저장하지 않는다: 저장 시각이 그대로이고, 시간이 지나도 주기·pagehide 저장이 없다', () => {
+    const { raw } = savedRun(10)
+    const { clock, store, data, calls } = setupRestored(raw, MIN)
+    store.getState().attach()
+    store.getState().saveNow()
+    clock.advance(60_000)
+    store.getState().saveNow()
+    assert.equal(calls.filter((c) => c === 'set').length, 0)
+    assert.equal(data.get(STORAGE_KEY), raw)
+  })
+
+  test('시간이 아무리 지나도 복원된 일시정지 세션의 경과 시간은 늘지 않는다', () => {
+    const { raw } = savedRun(10)
+    const { clock, store } = setupRestored(raw, 0)
+    store.getState().attach()
+    clock.advance(25 * MIN)
+    assert.equal(store.getState().session?.status, 'paused')
+    assert.equal(metricsOf(store).elapsedMs, 10_000)
+  })
+
+  test('복원한 세션을 다시 새로고침해도 같은 상태로 복원된다 (저장 시각이 늘지 않는다)', () => {
+    const { raw } = savedRun(10)
+    const first = setupRestored(raw, 10 * MIN)
+    first.store.getState().attach()
+    first.clock.advance(5 * MIN)
+    first.store.getState().saveNow() // pagehide
+    // 두 번째 새로고침: 저장 내용은 그대로이다
+    assert.equal(first.data.get(STORAGE_KEY), raw)
+    const second = setupRestored(first.data.get(STORAGE_KEY) ?? '', 20 * MIN)
+    assert.equal(second.store.getState().session?.status, 'paused')
+    assert.equal(metricsOf(second.store).elapsedMs, 10_000)
+    assertClose(metricsOf(second.store).distanceM, 30, 0.1)
+  })
+
+  test('이미 일시정지로 저장된 세션도 그대로 복원된다', () => {
+    const a = setupStored()
+    a.store.getState().start()
+    a.clock.advance(20_000)
+    a.store.getState().pause()
+    const raw = a.data.get(STORAGE_KEY) ?? ''
+    const { store } = setupRestored(raw, 3 * MIN, 20)
+    assert.equal(store.getState().session?.status, 'paused')
+    assert.equal(metricsOf(store).elapsedMs, 20_000)
+    assert.equal(store.getState().needsGpsReverify, true)
+  })
+
+  test('종료된 세션(Result)은 그대로 복원되고 재개 대상이 아니다', () => {
+    const a = setupStored()
+    a.store.getState().start()
+    for (let sec = 0; sec <= 10; sec += 1) a.geo.emitRunnerAt(sec)
+    a.store.getState().stop()
+    const raw = a.data.get(STORAGE_KEY) ?? ''
+    const { store, geo, clock } = setupRestored(raw, MIN)
+    assert.equal(store.getState().session?.status, 'finished')
+    assert.equal(store.getState().session?.endReason, 'user')
+    assert.deepEqual(store.getState().metrics, a.store.getState().metrics)
+    assert.equal(store.getState().needsGpsReverify, false)
+    store.getState().attach()
+    assert.equal(geo.watchCalls, 0)
+    assert.equal(clock.pending, 0)
+  })
+
+  test('30분이 지났거나 손상된 저장분은 복원하지 않고 지운다', () => {
+    const { raw } = savedRun(10)
+    const expired = setupRestored(raw, 31 * MIN)
+    assert.equal(expired.store.getState().session, null)
+    assert.equal(expired.data.has(STORAGE_KEY), false)
+    const broken = setupRestored('{"version":1,', 0)
+    assert.equal(broken.store.getState().session, null)
+    assert.equal(broken.data.has(STORAGE_KEY), false)
+    const ok = setupRestored(raw, 29 * MIN)
+    assert.equal(ok.store.getState().session?.status, 'paused')
+  })
+
+  test('hydrate를 부르기 전에는 storage를 읽지 않고, 이미 세션이 있으면 복원하지 않는다', () => {
+    const { raw } = savedRun(10)
+    const clock = new ManualClock(BASE + 20_000)
+    const geo = createFakeGeolocation(clock)
+    const fake = createFakeStorage({ [STORAGE_KEY]: raw })
+    const store = createMeasurementStore({
+      clock,
+      realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
+      storage: fake.storage,
+    })
+    assert.deepEqual(fake.calls, [])
+    store.getState().start()
+    const id = store.getState().session?.id
+    store.getState().hydrate()
+    assert.equal(store.getState().session?.id, id)
+    assert.equal(store.getState().needsGpsReverify, false)
+  })
+
+  test('storage가 없으면 hydrate는 아무 일도 하지 않는다', () => {
+    const clock = new ManualClock(BASE)
+    const store = createMeasurementStore({ clock, storage: null })
+    store.getState().hydrate()
+    assert.equal(store.getState().session, null)
+  })
+})
+
+describe('복원 후 GPS 재확인과 재개', () => {
+  test('attach 전에는 GPS 감시가 없고, attach하면 한 번만 시작한다 (중복 호출 무해)', () => {
+    const { raw } = savedRun(10)
+    const { store, geo } = setupRestored(raw, MIN)
+    assert.equal(geo.watchCalls, 0)
+    store.getState().attach()
+    store.getState().attach()
+    assert.equal(geo.watchCalls, 1)
+    assert.equal(geo.activeWatches, 1)
+  })
+
+  test('attach하면 화면용 시각(now)이 계속 갱신된다 (신호 끊김을 화면이 알 수 있다)', () => {
+    const { raw } = savedRun(10)
+    const { clock, geo, store } = setupRestored(raw, MIN)
+    store.getState().attach()
+    geo.emit(0)
+    clock.advance(11_000)
+    assert.equal(store.getState().now, clock.now())
+    assert.equal(getGpsStatus(store.getState().tracker, store.getState().now), 'lost')
+  })
+
+  test('GPS가 확인되기 전에는 resume()이 재개하지 않는다', () => {
+    const { raw } = savedRun(10)
+    const { clock, store } = setupRestored(raw, MIN)
+    store.getState().attach()
+    store.getState().resume()
+    assert.equal(store.getState().session?.status, 'paused')
+    assert.equal(store.getState().needsGpsReverify, true)
+    clock.advance(30_000)
+    store.getState().resume()
+    assert.equal(store.getState().session?.status, 'paused')
+  })
+
+  test('GPS가 확인된 뒤 resume()하면 이어지고, 누적 시간과 거리를 유지한 채 새 구간부터 계산한다', () => {
+    const { raw } = savedRun(10)
+    const { clock, geo, store } = setupRestored(raw, 10 * MIN)
+    store.getState().attach()
+    geo.emit(0.01) // 멀리 떨어진 곳에서 첫 좌표: 재확인용 (일시정지 중이라 지표에 반영되지 않는다)
+    assert.equal(store.getState().tracker.acceptedCount, 1)
+    assertClose(metricsOf(store).distanceM, 30, 0.1)
+    store.getState().resume()
+    assert.equal(store.getState().session?.status, 'running')
+    assert.equal(store.getState().needsGpsReverify, false)
+    clock.advance(1000)
+    geo.emit(0.01) // 재개 뒤 첫 좌표: 새 구간의 시작점
+    clock.advance(1000)
+    geo.emit(0.01 + 3 / METERS_PER_DEGREE) // 3 m 이동
+    // 거리는 저장된 30 m + 재개 뒤 3 m이다. 이전 위치와의 먼 거리가 더해지지 않는다.
+    assertClose(metricsOf(store).distanceM, 33, 0.2)
+    // 경과 시간은 저장된 10초 + 재개 뒤 2초이다. 새로고침으로 비어 있던 10분은 들어가지 않는다.
+    assert.equal(metricsOf(store).elapsedMs, 12_000)
+  })
+
+  test('GPS가 한 번 확인됐어도 신호가 끊기면 다시 재개할 수 없다', () => {
+    const { raw } = savedRun(10)
+    const { clock, geo, store } = setupRestored(raw, MIN)
+    store.getState().attach()
+    geo.emit(0)
+    clock.advance(10_001)
+    store.getState().resume()
+    assert.equal(store.getState().session?.status, 'paused')
+    geo.emit(0)
+    store.getState().resume()
+    assert.equal(store.getState().session?.status, 'running')
+  })
+
+  test('권한 거부로 GPS를 쓸 수 없으면 재개할 수 없지만 종료할 수 있다', () => {
+    const { raw } = savedRun(10)
+    const { clock, geo, store } = setupRestored(raw, MIN)
+    store.getState().attach()
+    geo.fail(1)
+    store.getState().resume()
+    assert.equal(store.getState().session?.status, 'paused')
+    store.getState().stop()
+    assert.equal(store.getState().session?.endReason, 'user')
+    assert.equal(clock.pending, 0)
+    assert.equal(geo.activeWatches, 0)
+  })
+
+  test('재개하면 남은 시간만큼 타이머를 다시 예약하고 600초에 자동 종료한다 (복원 대기 시간 제외)', () => {
+    const { raw } = savedRun(100)
+    const { clock, geo, store } = setupRestored(raw, 8 * MIN, 100)
+    store.getState().attach()
+    geo.emit(0)
+    store.getState().resume()
+    clock.advance(499_999)
+    assert.equal(store.getState().session?.status, 'running')
+    clock.advance(1)
+    assert.equal(store.getState().session?.endReason, 'auto')
+    assert.equal(metricsOf(store).elapsedMs, 600_000)
+  })
+
+  test('재개하면 저장이 다시 시작되고, 그 뒤 새로고침하면 재개 이후 시간까지 복원된다', () => {
+    const { raw } = savedRun(10)
+    const first = setupRestored(raw, MIN)
+    first.store.getState().attach()
+    first.geo.emit(0)
+    first.store.getState().resume()
+    first.clock.advance(7000)
+    first.store.getState().saveNow()
+    const saved = first.data.get(STORAGE_KEY) ?? ''
+    assert.notEqual(saved, raw)
+    const second = setupRestored(saved, 2 * MIN, 17)
+    assert.equal(second.store.getState().session?.status, 'paused')
+    assert.equal(metricsOf(second.store).elapsedMs, 17_000)
+  })
+
+  test('복원된 세션을 종료하면 종료 상태가 저장되고 GPS 감시가 정리된다', () => {
+    const { raw } = savedRun(10)
+    const { clock, geo, store, data } = setupRestored(raw, MIN)
+    store.getState().attach()
+    store.getState().stop()
+    assert.equal(store.getState().session?.status, 'finished')
+    assert.equal(store.getState().needsGpsReverify, false)
+    assert.equal(JSON.parse(data.get(STORAGE_KEY) ?? '').session.status, 'finished')
+    assert.equal(geo.activeWatches, 0)
+    assert.equal(clock.pending, 0)
+  })
+
+  test('일반 측정에서는 복원 상태가 아니고 attach는 아무 일도 하지 않는다', () => {
+    const { geo, store } = setupStored()
+    store.getState().start()
+    assert.equal(store.getState().needsGpsReverify, false)
+    store.getState().attach()
+    assert.equal(geo.watchCalls, 1) // start가 시작한 감시 하나뿐
+  })
+})
+
+describe('복원된 세션과 새 측정', () => {
+  test('복원된 세션이 있을 때 새 측정을 시작하면 복원 세션을 교체한다', () => {
+    const { raw, sessionId } = savedRun(10)
+    const { store, geo, data } = setupRestored(raw, MIN)
+    store.getState().attach()
+    assert.equal(geo.activeWatches, 1)
+    store.getState().start()
+    const state = store.getState()
+    assert.equal(state.session?.status, 'running')
+    assert.notEqual(state.session?.id, sessionId)
+    assert.equal(state.needsGpsReverify, false)
+    assert.equal(state.metrics.distanceM, 0)
+    assert.equal(geo.activeWatches, 1) // 이전 감시는 정리되고 새 감시 하나만 남는다
+    assert.equal(JSON.parse(data.get(STORAGE_KEY) ?? '').session.id, state.session?.id) // 저장분도 교체됨
+  })
+
+  test('복원된 종료 세션 뒤의 새 측정은 기존처럼 시작된다', () => {
+    const a = setupStored()
+    a.store.getState().start()
+    a.clock.advance(5000)
+    a.store.getState().stop()
+    const { store } = setupRestored(a.data.get(STORAGE_KEY) ?? '', MIN, 0)
+    store.getState().start()
+    assert.equal(store.getState().session?.status, 'running')
+  })
+})
+
+describe('새로고침과 화면 이탈 구분 (unloading)', () => {
+  test('언로드 중(pagehide)에 예약된 이탈 종료는 실행되지 않는다', () => {
+    const { clock, store, data } = setupStored()
+    store.getState().start()
+    clock.advance(3000)
+    store.getState().saveNow()
+    store.getState().setUnloading(true)
+    store.getState().scheduleLeaveStop()
+    clock.advance(0)
+    assert.equal(store.getState().session?.status, 'running')
+    assert.equal(JSON.parse(data.get(STORAGE_KEY) ?? '').session.status, 'running')
+  })
+
+  test('pageshow로 풀리면(unloading=false) 이탈 종료가 평소처럼 동작한다', () => {
+    const { clock, store } = setupStored()
+    store.getState().start()
+    store.getState().setUnloading(true)
+    store.getState().setUnloading(false)
+    store.getState().scheduleLeaveStop()
+    clock.advance(0)
+    assert.equal(store.getState().session?.endReason, 'user')
+  })
+
+  test('평소의 화면 이탈은 종료한다 (SPA 이동)', () => {
+    const { clock, store, data } = setupStored()
+    store.getState().start()
+    store.getState().scheduleLeaveStop()
+    clock.advance(0)
+    assert.equal(store.getState().session?.status, 'finished')
+    assert.equal(JSON.parse(data.get(STORAGE_KEY) ?? '').session.status, 'finished')
+  })
+
+  test('복원된 세션에서 화면을 떠나면 종료한다', () => {
+    const { raw } = savedRun(10)
+    const { clock, store, geo } = setupRestored(raw, MIN)
+    store.getState().attach()
+    store.getState().scheduleLeaveStop()
+    clock.advance(0)
+    assert.equal(store.getState().session?.endReason, 'user')
+    assert.equal(geo.activeWatches, 0)
+  })
+
+  test('StrictMode처럼 마운트, 언마운트, 마운트가 같은 틱에 일어나도 복원된 세션이 끝나지 않는다', () => {
+    const { raw } = savedRun(10)
+    const { clock, store, geo } = setupRestored(raw, MIN)
+    store.getState().cancelLeaveStop()
+    store.getState().attach()
+    store.getState().scheduleLeaveStop()
+    store.getState().cancelLeaveStop()
+    store.getState().attach()
+    clock.advance(0)
+    assert.equal(store.getState().session?.status, 'paused')
+    assert.equal(geo.watchCalls, 1)
+  })
+
+  test('사용자 종료와 10분 자동 종료는 언로드 플래그와 무관하게 동작한다', () => {
+    const a = setupStored()
+    a.store.getState().start()
+    a.store.getState().setUnloading(true)
+    a.store.getState().stop()
+    assert.equal(a.store.getState().session?.endReason, 'user')
+    const b = setupStored()
+    b.store.getState().start()
+    b.store.getState().setUnloading(true)
+    b.clock.advance(600_000)
+    assert.equal(b.store.getState().session?.endReason, 'auto')
+  })
+
+  test('일시정지 중에는 주기 저장과 saveNow가 저장하지 않는다 (running일 때만)', () => {
+    const { clock, store, calls } = setupStored()
+    store.getState().start()
+    clock.advance(1000)
+    store.getState().pause()
+    const count = calls.filter((c) => c === 'set').length
+    clock.advance(30_000)
+    store.getState().saveNow()
+    assert.equal(calls.filter((c) => c === 'set').length, count)
+  })
+})
