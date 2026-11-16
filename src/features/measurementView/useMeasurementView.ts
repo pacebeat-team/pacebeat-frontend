@@ -14,6 +14,11 @@ const urlMode: UrlMode =
     ? { virtual: null, mock: false }
     : parseUrlMode(window.location.search, import.meta.env.DEV)
 
+// 페이지를 떠나기 직전(새로고침, 탭 닫기)에 실제 GPS 측정을 한 번 더 저장한다. (best effort)
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => measurementStore.getState().saveNow())
+}
+
 export interface MeasurementViewResult {
   view: MeasurementView
   actions: MeasurementActions

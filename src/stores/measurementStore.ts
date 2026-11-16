@@ -20,6 +20,8 @@ import type {
   RawFix,
   SessionEndReason,
 } from '../features/measurement/types.ts'
+import { getBrowserStorage, saveMeasurement } from '../features/measurement/sessionPersistence.ts'
+import type { StorageLike } from '../features/measurement/sessionPersistence.ts'
 import { createVirtualGeolocation, SYSTEM_CLOCK } from '../features/measurement/virtualGeolocation.ts'
 import type { VirtualClock } from '../features/measurement/virtualGeolocation.ts'
 import { VIRTUAL_SCENARIOS } from '../features/measurement/virtualScenarios.ts'
@@ -33,6 +35,9 @@ import type { VirtualScenarioId } from '../features/measurement/virtualScenarios
 // - 종료는 사용자 종료, 가상 시나리오 완료, 실제 GPS 측정의 목표 시간(10분) 도달 세 가지이다.
 //   목표 시간은 실제 GPS 측정에만 적용하고, 일시정지한 시간은 세지 않는다. 가상 측정은 시나리오가 끝나면 끝난다.
 // - 세션, 좌표 시각, 공급원은 모두 같은 시계(deps.clock, 기본 Date.now)를 쓴다.
+// - 실제 GPS 측정만 저장한다(session과 metrics, localStorage). 시작, 일시정지, 재개, 종료 때와 측정 중 약 5초마다,
+//   그리고 saveNow()(화면을 떠날 때 등)에서 저장한다. 저장이 실패해도 측정과 Store 상태에는 영향이 없다.
+//   가상 측정은 storage를 읽지도, 쓰지도, 지우지도 않는다. (복원은 아직 없다)
 
 export type RunSource =
   | { readonly kind: 'real' }
@@ -69,6 +74,8 @@ export interface MeasurementActions {
   // 그 사이에 cancelLeaveStop이 불리면(개발 환경 StrictMode의 즉시 재마운트) 취소한다.
   scheduleLeaveStop: () => void
   cancelLeaveStop: () => void
+  // 지금 상태를 바로 저장한다(실제 GPS 측정만). 페이지를 떠나기 직전(pagehide)에 부른다. 실패해도 아무 일도 없다.
+  saveNow: () => void
 }
 
 export type MeasurementState = MeasurementData & MeasurementActions
@@ -78,9 +85,13 @@ export interface MeasurementDeps {
   readonly clock: VirtualClock
   // 실제 GPS 모드의 실행 환경. 기본값은 브라우저(navigator.geolocation)이다.
   readonly realEnv?: () => GeolocationEnv
+  // 실제 GPS 측정을 저장할 곳. 없으면 저장하지 않는다. (앱은 localStorage, 테스트는 가짜)
+  readonly storage?: StorageLike | null
 }
 
 const TICK_MS = 500
+// 측정 중 저장 간격(ms)
+const SAVE_INTERVAL_MS = 5000
 
 // 주소의 ?virtual=... 값을 읽는다. 없으면 null, 값 없이 ?virtual이면 steady, 모르는 값이면 null(실제 GPS).
 export function isVirtualScenarioId(value: string): value is VirtualScenarioId {
@@ -131,6 +142,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
   let cancelTick: (() => void) | null = null
   let cancelLeave: (() => void) | null = null
   let cancelTarget: (() => void) | null = null
+  let lastSavedAt = 0
   // 이전 측정의 늦은 콜백이 새 측정에 섞이지 않는 것은 다른 장치가 보장한다:
   // 공급원은 stop() 뒤 콜백을 무시하고(geolocationSource), 가상 공급원은 clearWatch 때 완료 예약을 취소한다.
 
@@ -144,6 +156,18 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
     function stopTick(): void {
       cancelTick?.()
       cancelTick = null
+    }
+
+    // 실제 GPS 측정의 session과 metrics를 저장한다. 가상 측정과 측정 전에는 storage를 건드리지 않는다.
+    // 저장 실패는 무시한다(측정과 Store 상태에 영향을 주지 않는다).
+    function persist(): void {
+      const { session, metrics, runSource } = get()
+      if (session === null || runSource?.kind !== 'real' || !deps.storage) {
+        return
+      }
+      const now = clock.now()
+      lastSavedAt = now
+      saveMeasurement(deps.storage, { session, metrics }, now) // 던지지 않는다. 실패(false)는 무시한다.
     }
 
     function stopTarget(): void {
@@ -180,6 +204,9 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
           return
         }
         set({ now: clock.now() })
+        if (clock.now() - lastSavedAt >= SAVE_INTERVAL_MS) {
+          persist()
+        }
         startTick()
       }, TICK_MS)
     }
@@ -196,6 +223,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
       stopSource()
       stopTick()
       stopTarget()
+      persist()
     }
 
     // 좌표 한 개: 검증 → (통과하면) 지표 반영을 한 번의 갱신으로 한다. 예외를 던지지 않는다.
@@ -275,6 +303,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
           runSource,
           targetDurationMs: runSource.kind === 'real' ? REAL_TARGET_DURATION_MS : null,
         })
+        persist()
         armTarget()
         startTick()
         source = createSource(runSource)
@@ -290,6 +319,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         const now = clock.now()
         set({ session: pauseSession(session, now), now })
         stopTarget()
+        persist()
       },
 
       resume: () => {
@@ -300,6 +330,7 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         const now = clock.now()
         set({ session: resumeSession(session, now), now })
         armTarget()
+        persist()
       },
 
       stop: () => finish('user'),
@@ -318,13 +349,20 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         cancelLeave?.()
         cancelLeave = null
       },
+
+      saveNow: () => {
+        // 종료된 세션은 종료할 때 이미 저장했다. 다시 저장하면 저장 시각이 갱신되어 보관 기간이 늘어나므로 건너뛴다.
+        if (get().session?.status !== 'finished') {
+          persist()
+        }
+      },
     }
   })
 
   return store
 }
 
-export const measurementStore = createMeasurementStore()
+export const measurementStore = createMeasurementStore({ clock: SYSTEM_CLOCK, storage: getBrowserStorage() })
 
 export function useMeasurementStore<T>(selector: (state: MeasurementState) => T): T {
   return useStore(measurementStore, selector)

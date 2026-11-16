@@ -5,6 +5,8 @@ import { getGpsStatus } from '../features/measurement/gpsTracker.ts'
 import { getMetrics } from '../features/measurement/metrics.ts'
 import type { MeasurementMetrics } from '../features/measurement/types.ts'
 import type { VirtualClock } from '../features/measurement/virtualGeolocation.ts'
+import { STORAGE_KEY } from '../features/measurement/sessionPersistence.ts'
+import type { StorageLike } from '../features/measurement/sessionPersistence.ts'
 import { createMeasurementStore, parseUrlMode, parseVirtualParam } from './measurementStore.ts'
 import type { StartOptions } from './measurementStore.ts'
 
@@ -961,5 +963,317 @@ describe('주소 모드 (parseUrlMode)', () => {
 
   test('알 수 없는 virtual 값과 ?scenario=가 함께 있으면 기존 Mock 모드가 유지된다', () => {
     assert.deepEqual(parseUrlMode('?virtual=nope&scenario=normal', true), { virtual: null, mock: true })
+  })
+})
+
+// 호출 기록이 남는 가짜 storage. failSet이 true이면 setItem이 예외를 던진다.
+function createFakeStorage(initial: Record<string, string> = {}) {
+  const data = new Map(Object.entries(initial))
+  const calls: string[] = []
+  const state = { failSet: false, failAll: false }
+  const storage: StorageLike = {
+    getItem(key) {
+      calls.push('get')
+      if (state.failAll) throw new Error('blocked')
+      return data.get(key) ?? null
+    },
+    setItem(key, value) {
+      calls.push('set')
+      if (state.failSet || state.failAll) throw new DOMException('quota', 'QuotaExceededError')
+      data.set(key, value)
+    },
+    removeItem(key) {
+      calls.push('remove')
+      if (state.failAll) throw new Error('blocked')
+      data.delete(key)
+    },
+  }
+  return { storage, data, calls, state }
+}
+
+function setupStored(initial: Record<string, string> = {}) {
+  const clock = new ManualClock(BASE)
+  const geo = createFakeGeolocation(clock)
+  const fake = createFakeStorage(initial)
+  const store = createMeasurementStore({
+    clock,
+    realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
+    storage: fake.storage,
+  })
+  return { clock, geo, store, ...fake }
+}
+
+function savedOf(data: Map<string, string>) {
+  const raw = data.get(STORAGE_KEY)
+  return raw === undefined ? null : JSON.parse(raw)
+}
+
+describe('실제 측정 저장', () => {
+  test('시작하면 {version, savedAt, session, metrics}를 키 pacebeat:measurement:v1에 저장한다 (tracker 없음)', () => {
+    const { store, data } = setupStored()
+    store.getState().start()
+    const saved = savedOf(data)
+    assert.deepEqual(Object.keys(saved).sort(), ['metrics', 'savedAt', 'session', 'version'])
+    assert.equal(saved.version, 1)
+    assert.equal(saved.savedAt, BASE)
+    assert.deepEqual(saved.session, store.getState().session)
+    assert.deepEqual(saved.metrics, store.getState().metrics)
+    assert.deepEqual([...data.keys()], ['pacebeat:measurement:v1'])
+  })
+
+  test('일시정지, 재개, 종료 때 저장한다', () => {
+    const { clock, store, data } = setupStored()
+    store.getState().start()
+    clock.advance(2000)
+    store.getState().pause()
+    assert.equal(savedOf(data).session.status, 'paused')
+    assert.equal(savedOf(data).savedAt, BASE + 2000)
+    clock.advance(1000)
+    store.getState().resume()
+    assert.equal(savedOf(data).session.status, 'running')
+    clock.advance(1000)
+    store.getState().stop()
+    assert.equal(savedOf(data).session.status, 'finished')
+    assert.equal(savedOf(data).session.endReason, 'user')
+  })
+
+  test('사용자 종료 후 Result 데이터(session과 지표)가 저장되어 있다', () => {
+    const { clock, geo, store, data } = setupStored()
+    store.getState().start()
+    for (let sec = 0; sec <= 10; sec += 1) geo.emitRunnerAt(sec)
+    clock.advanceTo(10)
+    store.getState().stop()
+    const saved = savedOf(data)
+    assert.deepEqual(saved.session, store.getState().session)
+    assert.deepEqual(saved.metrics, store.getState().metrics)
+    assertClose(saved.metrics.distanceM, 30, 0.1)
+  })
+
+  test('10분 자동 종료와 화면 이탈 종료도 저장한다', () => {
+    const a = setupStored()
+    a.store.getState().start()
+    a.clock.advance(600_000)
+    assert.equal(savedOf(a.data).session.endReason, 'auto')
+
+    const b = setupStored()
+    b.store.getState().start()
+    b.store.getState().scheduleLeaveStop()
+    b.clock.advance(0)
+    assert.equal(savedOf(b.data).session.endReason, 'user')
+  })
+
+  test('측정 중에는 약 5초마다 저장하고, 그 사이에는 저장하지 않는다', () => {
+    const { clock, geo, store, data, calls } = setupStored()
+    store.getState().start()
+    assert.equal(calls.filter((c) => c === 'set').length, 1)
+    for (let sec = 0; sec <= 4; sec += 1) geo.emitRunnerAt(sec)
+    clock.advanceTo(4.9)
+    assert.equal(calls.filter((c) => c === 'set').length, 1) // 5초 전에는 그대로
+    clock.advanceTo(5)
+    assert.equal(calls.filter((c) => c === 'set').length, 2)
+    assert.equal(savedOf(data).savedAt, BASE + 5000)
+    assert.ok(savedOf(data).metrics.distanceM > 0) // 그 사이 쌓인 지표가 들어 있다
+    clock.advanceTo(9.9)
+    assert.equal(calls.filter((c) => c === 'set').length, 2)
+    clock.advanceTo(10)
+    assert.equal(calls.filter((c) => c === 'set').length, 3)
+    assert.equal(savedOf(data).savedAt, BASE + 10_000)
+  })
+
+  test('종료 후에는 주기 저장이 멈춘다', () => {
+    const { clock, store, calls } = setupStored()
+    store.getState().start()
+    clock.advance(1000)
+    store.getState().stop()
+    const count = calls.filter((c) => c === 'set').length
+    clock.advance(60_000)
+    assert.equal(calls.filter((c) => c === 'set').length, count)
+  })
+
+  test('saveNow(pagehide)는 지금 상태를 바로 저장한다', () => {
+    const { clock, geo, store, data, calls } = setupStored()
+    store.getState().start()
+    geo.emitRunnerAt(0)
+    geo.emitRunnerAt(1)
+    clock.advanceTo(1.2)
+    const before = calls.filter((c) => c === 'set').length
+    store.getState().saveNow()
+    assert.equal(calls.filter((c) => c === 'set').length, before + 1)
+    assert.equal(savedOf(data).savedAt, clock.now())
+    assert.deepEqual(savedOf(data).metrics, store.getState().metrics)
+  })
+
+  test('saveNow는 측정 전과 종료 후에는 저장하지 않는다 (종료 후 저장 시각을 늘리지 않는다)', () => {
+    const { clock, store, calls, data } = setupStored()
+    store.getState().saveNow()
+    assert.deepEqual(calls, [])
+    store.getState().start()
+    clock.advance(1000)
+    store.getState().stop()
+    const savedAt = savedOf(data).savedAt
+    const count = calls.length
+    clock.advance(10_000)
+    store.getState().saveNow()
+    assert.equal(calls.length, count)
+    assert.equal(savedOf(data).savedAt, savedAt)
+  })
+
+  test('실제 측정을 시작하면 이전 저장 데이터를 새 세션으로 덮어쓴다', () => {
+    const old = JSON.stringify({
+      version: 1,
+      savedAt: BASE - 60_000,
+      session: { id: 'old-session', status: 'finished', startedAt: BASE - 120_000, endedAt: BASE - 60_000, endReason: 'user', pauses: [] },
+      metrics: { lastFix: null, distanceM: 999, validMs: 1, recent: [] },
+    })
+    const { store, data } = setupStored({ [STORAGE_KEY]: old })
+    store.getState().start()
+    const saved = savedOf(data)
+    assert.notEqual(saved.session.id, 'old-session')
+    assert.equal(saved.session.id, store.getState().session?.id)
+    assert.equal(saved.metrics.distanceM, 0)
+  })
+
+  test('중복 start는 다시 저장하지 않는다', () => {
+    const { store, calls } = setupStored()
+    store.getState().start()
+    const count = calls.length
+    store.getState().start()
+    assert.equal(calls.length, count)
+  })
+})
+
+describe('저장 실패가 측정에 영향을 주지 않는다', () => {
+  test('setItem이 계속 예외를 던져도 측정과 종료가 정상이고, 상태가 저장 성공 때와 같다', () => {
+    const failing = setupStored()
+    failing.state.failSet = true
+    const ok = setupStored()
+    for (const ctx of [failing, ok]) {
+      ctx.store.getState().start()
+      for (let sec = 0; sec <= 12; sec += 1) ctx.geo.emitRunnerAt(sec)
+      ctx.clock.advanceTo(12)
+      ctx.store.getState().pause()
+      ctx.clock.advance(3000)
+      ctx.store.getState().resume()
+      ctx.clock.advance(2000)
+      ctx.store.getState().saveNow()
+      ctx.store.getState().stop()
+    }
+    const a = failing.store.getState()
+    const b = ok.store.getState()
+    // 세션 id는 시작할 때마다 무작위로 만들어지므로 id만 빼고 비교한다.
+    assert.deepEqual({ ...a.session, id: '' }, { ...b.session, id: '' })
+    assert.deepEqual(a.metrics, b.metrics)
+    assert.deepEqual(a.tracker, b.tracker)
+    assert.equal(a.session?.endReason, 'user')
+    assertClose(metricsOf(failing.store).distanceM, 36, 0.1)
+    assert.equal(failing.geo.activeWatches, 0)
+    assert.equal(failing.clock.pending, 0)
+  })
+
+  test('setItem이 예외를 던져도 10분 자동 종료가 동작한다', () => {
+    const { clock, store, state } = setupStored()
+    state.failSet = true
+    store.getState().start()
+    clock.advance(600_000)
+    assert.equal(store.getState().session?.endReason, 'auto')
+  })
+
+  test('storage 접근이 모두 막혀 있어도(getItem, removeItem 포함) 측정이 정상이다', () => {
+    const { clock, store, state } = setupStored()
+    state.failAll = true
+    store.getState().start()
+    clock.advance(20_000)
+    store.getState().pause()
+    store.getState().resume()
+    store.getState().stop()
+    assert.equal(store.getState().session?.status, 'finished')
+  })
+
+  test('storage 없이(null, 생략) 만든 Store도 정상이다', () => {
+    for (const storage of [null, undefined]) {
+      const clock = new ManualClock(BASE)
+      const geo = createFakeGeolocation(clock)
+      const store = createMeasurementStore({
+        clock,
+        realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
+        storage,
+      })
+      store.getState().start()
+      clock.advance(5000)
+      store.getState().saveNow()
+      store.getState().stop()
+      assert.equal(store.getState().session?.endReason, 'user')
+    }
+  })
+})
+
+describe('가상 측정과 저장', () => {
+  function setupVirtualStored(initial: Record<string, string> = {}) {
+    const clock = new ManualClock(BASE)
+    const fake = createFakeStorage(initial)
+    const store = createMeasurementStore({ clock, storage: fake.storage })
+    return { clock, store, ...fake }
+  }
+
+  test('가상 측정의 시작, 진행, 일시정지, 완료, saveNow 동안 storage 호출이 0회이다', () => {
+    const { clock, store, calls } = setupVirtualStored()
+    store.getState().start(virtual('steady'))
+    clock.advance(30_000)
+    store.getState().pause()
+    store.getState().resume()
+    store.getState().saveNow()
+    clock.advance(150_000)
+    assert.equal(store.getState().session?.endReason, 'auto')
+    store.getState().saveNow()
+    assert.deepEqual(calls, [])
+  })
+
+  test('모든 가상 시나리오와 사용자 종료, 화면 이탈 종료에서도 storage 호출이 0회이다', () => {
+    for (const id of ['steady', 'stop-and-go', 'gps-lost', 'gps-glitch'] as const) {
+      const { clock, store, calls } = setupVirtualStored()
+      store.getState().start(virtual(id))
+      clock.advance(200_000)
+      assert.deepEqual(calls, [], id)
+    }
+    const a = setupVirtualStored()
+    a.store.getState().start(virtual('steady'))
+    a.clock.advance(10_000)
+    a.store.getState().stop()
+    const b = setupVirtualStored()
+    b.store.getState().start(virtual('steady'))
+    b.store.getState().scheduleLeaveStop()
+    b.clock.advance(0)
+    assert.deepEqual([...a.calls, ...b.calls], [])
+  })
+
+  test('가상 측정 전에 저장해 둔 실제 데이터가 가상 측정 뒤에도 그대로 남는다', () => {
+    const real = setupStored()
+    real.store.getState().start()
+    real.clock.advance(7000)
+    real.store.getState().pause()
+    const before = real.data.get(STORAGE_KEY)
+    assert.ok(before !== undefined)
+
+    const { clock, store, data, calls } = setupVirtualStored({ [STORAGE_KEY]: before })
+    store.getState().start(virtual('gps-lost'))
+    clock.advance(200_000)
+    assert.equal(data.get(STORAGE_KEY), before)
+    assert.deepEqual(calls, [])
+  })
+
+  test('가상 측정을 마친 뒤 같은 Store로 실제 측정을 시작하면 그때부터 저장한다', () => {
+    const clock = new ManualClock(BASE)
+    const geo = createFakeGeolocation(clock)
+    const fake = createFakeStorage()
+    const store = createMeasurementStore({
+      clock,
+      realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
+      storage: fake.storage,
+    })
+    store.getState().start(virtual('steady'))
+    clock.advance(180_000)
+    assert.deepEqual(fake.calls, [])
+    store.getState().start()
+    assert.equal(savedOf(fake.data).session.id, store.getState().session?.id)
   })
 })
