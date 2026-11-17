@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useKeyboardInset } from '../keyboardInset.ts'
 
 // 프로필 입력 3단계 화면의 공통 틀 (Figma PROFILE / Nickname · Demographics · Body).
 // 위쪽은 스크롤되는 콘텐츠(헤더, 진행 표시, 제목, 설명, 입력 영역)이고, 아래쪽 푸터(CTA, 건너뛰기)는 항상 보인다.
@@ -83,8 +84,10 @@ export function ProfileStepLayout({
 }: ProfileStepLayoutProps) {
   // Figma에서 첫 단계(닉네임)만 헤더 아래 간격 10px, 설명 14px/20px, 입력 영역 앞 26px이다. 나머지 단계는 12px, 15px/22px, 28px이다.
   const first = step === 1
+  // iOS Safari는 키보드가 화면 아래를 덮기만 하고 레이아웃을 줄이지 않는다. 가려지는 높이만큼 아래를 비워 CTA를 키보드 위로 올린다.
+  const keyboardInset = useKeyboardInset()
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" style={keyboardInset > 0 ? { paddingBottom: keyboardInset } : undefined}>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[24px] pb-[24px] pt-[12px]">
         <ProfileHeader title="프로필 만들기" onBack={onBack} />
 
