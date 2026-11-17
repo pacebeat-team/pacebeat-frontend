@@ -25,6 +25,8 @@ import { ActivePage } from '../pages/measurement/ActivePage'
 import { ResultPage } from '../pages/measurement/ResultPage'
 import { ConsentScreen } from '../features/profile/screens/ConsentScreen'
 import { NicknameScreen } from '../features/profile/screens/NicknameScreen'
+import { DemographicsScreen } from '../features/profile/screens/DemographicsScreen'
+import { BodyScreen } from '../features/profile/screens/BodyScreen'
 import { PROFILE_ROUTES } from '../features/profile/routes'
 
 export const router = createBrowserRouter([
@@ -65,6 +67,14 @@ export const router = createBrowserRouter([
       {
         path: PROFILE_ROUTES.nickname,
         element: <NicknameScreen />,
+      },
+      {
+        path: PROFILE_ROUTES.demographics,
+        element: <DemographicsScreen />,
+      },
+      {
+        path: PROFILE_ROUTES.body,
+        element: <BodyScreen />,
       },
       {
         path: 'home',
