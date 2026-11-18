@@ -10,6 +10,7 @@ import type {
   RawFix,
 } from '../measurement/types.ts'
 import type { RunMode } from './types.ts'
+import { computeAvgPaceSecPerKm } from './runPace.ts'
 
 // 러닝 지표 (순수 함수): GPS 모드는 좌표 검증·거리·페이스, TIME 모드는 경과 시간만.
 // - 기초 측정의 순수 엔진(gpsTracker, metrics)만 쓴다. 위치 구독(geolocationSource) 연결은 #46의 책임이다.
@@ -59,7 +60,8 @@ export function getGpsRunMetrics(state: GpsRunState, session: MeasurementSession
     mode: 'gps',
     elapsedMs: metrics.elapsedMs,
     distanceM: metrics.distanceM,
-    avgPaceSecPerKm: metrics.avgPaceSecPerKm,
+    // 평균 페이스는 결과·기록과 같은 기준(러닝 시간 ÷ 거리)을 쓴다.
+    avgPaceSecPerKm: computeAvgPaceSecPerKm(metrics.elapsedMs, metrics.distanceM),
     currentPaceSecPerKm: metrics.currentPaceSecPerKm,
     gpsSignal: getGpsStatus(state.tracker, now),
   }

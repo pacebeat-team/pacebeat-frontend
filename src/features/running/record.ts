@@ -13,6 +13,12 @@ export function createRecordId(cryptoLike?: CryptoLike): string {
   return createSessionId(cryptoLike)
 }
 
+// recordId를 세션 id에서 정한다. 같은 세션은 언제 어디서 저장해도 같은 recordId이므로
+// 저장 재시도·새로고침 뒤 다시 저장해도 기록이 중복되지 않고 덮어쓴다.
+export function deriveRecordId(sessionId: string): string {
+  return `rec-${sessionId}`
+}
+
 export const NO_GOAL: RunGoal = Object.freeze({ targetDistanceKm: null, targetDurationSec: null })
 
 export interface BuildRunRecordInput {

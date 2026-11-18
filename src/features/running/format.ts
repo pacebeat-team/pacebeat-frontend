@@ -32,3 +32,29 @@ export function formatGoalChip(distanceKm: number, durationSec: number): string 
 export function formatDistanceKm(distanceKm: number): string {
   return distanceKm.toFixed(1)
 }
+
+// 경과 시간(ms) → "09:51", 1시간 이상이면 "1:02:03". 진행 화면의 큰 시계에 쓴다.
+export function formatClock(ms: number): string {
+  const total = Math.max(0, Math.floor((Number.isFinite(ms) ? ms : 0) / 1000))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`
+}
+
+// 거리(m) → km 소수 둘째 자리 버림 ("1.42"). 반올림하지 않아 목표 도달 전에 목표 값으로 보이지 않는다.
+export function formatDistanceKm2(distanceM: number): string {
+  const hundredths = Math.floor(Math.max(0, Number.isFinite(distanceM) ? distanceM : 0) / 10)
+  return (hundredths / 100).toFixed(2)
+}
+
+// 페이스(초/km) → "6:56", 없으면 "—"
+export function formatPaceOrDash(secPerKm: number | null): string {
+  return secPerKm === null ? '—' : formatPace(secPerKm)
+}
+
+// 남은 거리(m) → km 소수 둘째 자리 올림. 목표에 아직 못 미쳤는데 "0.00 km 남았어요"로 보이지 않는다.
+export function formatRemainingKm2(remainingM: number): string {
+  const safe = Math.max(0, Number.isFinite(remainingM) ? remainingM : 0)
+  return (Math.ceil(safe / 10 - 1e-9) / 100).toFixed(2)
+}
