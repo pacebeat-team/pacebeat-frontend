@@ -50,26 +50,26 @@ export function ActivePage() {
             </p>
           )}
           {!isTime && progress !== null && (
-            <div className="mt-[38px] flex gap-5">
+            <div className="mt-[37px] flex gap-5">
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] leading-[18px] text-muted">남은 거리</p>
-                <p className="mt-[2px] flex items-baseline gap-1 text-ink">
-                  <span className="text-[35px] font-light leading-[42px]">{formatRemainingKm2(progress.remainingM)}</span>
+                <p className="mt-[4px] flex items-baseline gap-1 text-ink">
+                  <span className="text-[35px] font-light leading-[42px] tracking-[-1.05px]">{formatRemainingKm2(progress.remainingM)}</span>
                   <span className="text-[14px] leading-5">km</span>
                 </p>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] leading-[18px] text-muted">재개 후 필요 페이스</p>
-                <p className="mt-[2px] flex items-baseline gap-1 text-ink">
-                  <span className="text-[35px] font-light leading-[42px]">{required === null ? '—' : formatPace(required)}</span>
+                <p className="mt-[4px] flex items-baseline gap-1 text-ink">
+                  <span className="text-[35px] font-light leading-[42px] tracking-[-1.05px]">{required === null ? '—' : formatPace(required)}</span>
                   <span className="text-[14px] leading-5">/km</span>
                 </p>
               </div>
             </div>
           )}
-          <p className={`${isTime ? 'mt-[62px]' : 'mt-[31px]'} text-[23px] leading-[34px]`}>러닝을 잠시 멈췄어요.</p>
-          <p className="mt-[16px] text-[15px] leading-6 text-muted">준비되면 계속 달릴 수 있어요.</p>
-          <p className="mt-[21px] text-[16px] leading-[25px] text-muted">
+          <p className={`${isTime ? 'mt-[62px]' : 'mt-[35px]'} text-[23px] leading-[34px]`}>러닝을 잠시 멈췄어요.</p>
+          <p className="mt-[10px] text-[15px] leading-6 text-muted">준비되면 계속 달릴 수 있어요.</p>
+          <p className="mt-[24px] text-[16px] leading-[25px] text-muted">
             목표 전에 끝내도
             <br />
             달린 만큼의 기록은 남아요.
@@ -113,22 +113,22 @@ export function ActivePage() {
         <div className="h-2" />
 
         {isTime ? (
-          <div className="flex h-[161px] flex-col justify-center pl-3 [@media(max-height:700px)]:h-[84px]">
+          <div className="flex h-[161px] flex-col pl-3 [@media(max-height:820px)_and_(min-height:701px)]:h-[117px] [@media(max-height:700px)]:h-[84px] [@media(max-height:700px)]:justify-center">
             <p
-              className={`font-light tracking-[3px] ${metrics.elapsedMs >= 3_600_000 ? 'text-[76px] leading-[96px] [@media(max-height:700px)]:text-[56px] [@media(max-height:700px)]:leading-[84px]' : 'text-[90px] leading-[132px] [@media(max-height:700px)]:text-[64px] [@media(max-height:700px)]:leading-[84px]'}`}
+              className={`font-light tracking-[3px] ${metrics.elapsedMs >= 3_600_000 ? 'text-[76px] leading-[96px] [@media(max-height:700px)]:text-[56px] [@media(max-height:700px)]:leading-[84px]' : 'text-[90px] leading-[132px] [@media(max-height:820px)_and_(min-height:701px)]:leading-[88px] [@media(max-height:700px)]:text-[64px] [@media(max-height:700px)]:leading-[84px]'}`}
             >
               {formatClock(metrics.elapsedMs)}
             </p>
           </div>
         ) : (
-          <p className="flex h-[161px] items-baseline gap-[6px] pl-3 [@media(max-height:700px)]:h-[84px]">
-            <span className="whitespace-nowrap text-[108px] font-light leading-[132px] tracking-[3px] [@media(max-height:700px)]:text-[64px] [@media(max-height:700px)]:leading-[84px]">{formatDistanceKm2(metrics.distanceM ?? 0)}</span>
+          <p className="flex h-[161px] items-baseline gap-[6px] pl-3 [@media(max-height:820px)_and_(min-height:701px)]:h-[117px] [@media(max-height:700px)]:h-[84px]">
+            <span className="whitespace-nowrap text-[108px] font-light leading-[132px] tracking-[3px] [@media(max-height:820px)_and_(min-height:701px)]:leading-[88px] [@media(max-height:700px)]:text-[64px] [@media(max-height:700px)]:leading-[84px]">{formatDistanceKm2(metrics.distanceM ?? 0)}</span>
             <span className="h-[52px] w-[60px] text-[38px] font-light leading-[59px] [@media(max-height:700px)]:text-[24px] [@media(max-height:700px)]:leading-[40px]">km</span>
           </p>
         )}
         <div className="h-[2px]" />
 
-        <div className="flex h-[78px] flex-col gap-2 px-[10px]">
+        <div className={`flex h-[78px] flex-col px-[10px] ${isTime ? 'gap-px pt-[7px]' : 'gap-2'}`}>
           {isTime ? (
             <>
               <p className="text-[20px] font-medium leading-[28px]">GPS 없이 시간만 기록</p>

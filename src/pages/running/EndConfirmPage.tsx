@@ -52,7 +52,7 @@ export function EndConfirmPage() {
           <br />
           충분히 의미 있는 한 걸음이에요.
         </p>
-        <p className="mt-5 text-[14px] leading-[23px] text-muted">종료하면 이번 러닝을 다시 이어갈 수 없어요.</p>
+        <p className="mt-[21px] text-[14px] leading-[23px] text-muted">종료하면 이번 러닝을 다시 이어갈 수 없어요.</p>
       </div>
       <RunFooter hasSecondary>
         <PrimaryButton label="종료하고 기록 남기기" onClick={finish} />

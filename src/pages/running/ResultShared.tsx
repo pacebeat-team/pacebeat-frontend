@@ -12,7 +12,7 @@ export function SaveFooter({ label = '저장하고 홈으로', destination = '/h
   const saveAndGo = useSaveAndGo()
   const saving = useRunResultStore((state) => state.saving)
   return (
-    <div className={`flex shrink-0 flex-col pt-2 pb-[max(0px,calc(31px-env(safe-area-inset-bottom,0px)))] ${inset ? 'px-6' : 'px-3'}`}>
+    <div className={`flex shrink-0 flex-col pt-2 ${inset ? 'px-6 pb-[max(0px,calc(31px-env(safe-area-inset-bottom,0px)))]' : 'px-3 pb-[max(0px,calc(36px-env(safe-area-inset-bottom,0px)))]'}`}>
       <PrimaryButton label={label} disabled={saving} onClick={() => saveAndGo(destination)} />
     </div>
   )

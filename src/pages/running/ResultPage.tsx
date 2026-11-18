@@ -124,7 +124,7 @@ export function GoalResult({ summary, arrival = false }: { summary: RunSummary; 
             <span className="flex size-[54px] shrink-0 items-center justify-center rounded-full bg-lime">
               <img src={reflectionIcon} alt="" aria-hidden="true" className="size-[26px]" />
             </span>
-            <span className="flex flex-col gap-[6px]">
+            <span className="flex h-[54px] flex-col gap-[6px]">
               <span className="text-[18px] font-semibold leading-6">러닝 회고하기</span>
               <span className="text-[14px] leading-[19px] text-muted">오늘 러닝은 어떠셨나요?</span>
             </span>
@@ -207,7 +207,8 @@ function TimeResult({ summary }: { summary: RunSummary }) {
             </div>
           </AchievementCard>
         </div>
-        <p className="mt-6 text-[19px] font-medium leading-[27px]">오늘 러닝은 어땠나요?</p>
+        {/* Figma: 숨겨진 구간별 페이스 자리의 간격(8·18px)이 남아 있어 제목이 24 + 26px 아래에 놓인다. */}
+        <p className="mt-[50px] text-[19px] font-medium leading-[27px]">오늘 러닝은 어땠나요?</p>
         <div className="mt-3">
           <DifficultyChips />
         </div>
