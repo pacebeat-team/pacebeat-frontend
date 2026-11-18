@@ -44,14 +44,17 @@ export function getProfileResumePath(state: ProfileFlowState): string | null {
 }
 
 // 이 단계 화면을 지금 열 수 있는가.
-// - consent: 가입을 완료하기 전에만 열 수 있다. 가입 도중에 닉네임 화면에서 뒤로 가 돌아올 수 있어야 하므로 미완료이면 항상 허용한다.
+// 가입을 완료한 사용자는 어느 단계도 열 수 없다. 가입이 끝난 뒤 브라우저 뒤로 가기 등으로 입력 화면에 다시 들어오지 못하게 한다.
+// (이미 완료한 프로필을 고치는 흐름은 이 가입 흐름이 아니라 이후 프로필 수정에서 따로 다룬다.)
+// 가입을 완료하지 않았다면 단계마다 다음이 필요하다.
+// - consent: 항상 허용한다. 가입 도중에 닉네임 화면에서 뒤로 가 돌아올 수 있어야 한다.
 // - nickname: 필수 동의가 필요하다.
 // - demographics, body: 필수 동의와 유효한 닉네임이 필요하다.
-// 가입을 완료한 사용자는 consent만 열 수 없다. 나머지 입력 화면은 이후 프로필 수정에서 쓰도록 열어 둔다.
 export function isStepAccessible(step: ProfileStep, state: ProfileFlowState): boolean {
+  if (isProfileComplete(state)) return false
   switch (step) {
     case 'consent':
-      return !isProfileComplete(state)
+      return true
     case 'nickname':
       return hasRequiredConsent(state)
     case 'demographics':

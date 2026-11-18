@@ -232,10 +232,15 @@ describe('isStepAccessible', () => {
     assert.deepEqual(access(createReadyStore()), [true, true, true, true])
   })
 
-  test('가입을 완료한 사용자는 동의 화면만 열 수 없다', () => {
+  test('가입을 완료한 사용자는 어느 단계도 열 수 없다 (뒤로 가기로 입력 화면에 다시 들어오지 못한다)', () => {
     const store = createReadyStore()
     store.getState().completeProfile(5)
-    assert.deepEqual(access(store), [false, true, true, true])
+    assert.deepEqual(access(store), [false, false, false, false])
+  })
+
+  test('완료 전에는 동의 화면이 항상 열려 있다 (가입 중 뒤로 가기 복귀)', () => {
+    assert.equal(isStepAccessible('consent', createStore().getState()), true)
+    assert.equal(isStepAccessible('consent', createReadyStore().getState()), true)
   })
 
   test('닉네임이 유효하지 않으면 출생연도·성별과 키·몸무게 화면을 열 수 없다', () => {
