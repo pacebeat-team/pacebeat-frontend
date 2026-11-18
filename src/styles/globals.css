@@ -107,6 +107,29 @@ body {
   animation: run-mascot-bounce 2.4s infinite;
 }
 
+/* HOME / HOME Arrival: Pose=Low → (0.8초 뒤) High(0.3초 이동) → (0.8초 뒤) Low(0.4초 복귀) 반복, 전체 2.3초.
+   High는 Low보다 (+6.8, -24)px 이동하고 약 -3.1° 회전. 기준값은 개발 전달 패키지 motion.json. */
+@keyframes home-mascot-loop {
+  0%,
+  34.78% {
+    transform: translate(0, 0) rotate(0deg);
+    animation-timing-function: ease-in-out;
+  }
+  47.83%,
+  82.61% {
+    transform: translate(6.8px, -24px) rotate(-3.1deg);
+    animation-timing-function: ease-in-out;
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+.home-mascot {
+  transform-origin: 50% 50%;
+  animation: home-mascot-loop 2.3s infinite;
+}
+
 /* 화면 전환: DISSOLVE 0.15초 ease-out */
 @keyframes route-dissolve {
   from {
@@ -123,6 +146,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .run-mascot,
+  .home-mascot,
   .route-dissolve {
     animation: none;
   }
