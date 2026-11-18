@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNavigation } from '../common/BottomNavigation'
+import { isRunNavVisible, isRunPath } from '../../features/running/runFlow'
 
 export interface AppLayoutProps {
   children?: ReactNode
@@ -11,7 +12,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isSplash = location.pathname === '/'
   const isOnboarding = location.pathname.startsWith('/onboarding')
   const isMeasurement = location.pathname.startsWith('/measurement')
-  const hideNavigation = isSplash || isOnboarding || isMeasurement
+  // 러닝 준비 흐름에서는 목표·음악 화면에서만 하단 네비를 보인다.
+  const isRunHidden = isRunPath(location.pathname) && !isRunNavVisible(location.pathname)
+  const hideNavigation = isSplash || isOnboarding || isMeasurement || isRunHidden
 
   return (
     <div
