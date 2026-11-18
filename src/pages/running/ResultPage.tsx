@@ -27,14 +27,19 @@ const CONFETTI: readonly { left: number; top: number; w: number; h: number; rota
 ]
 
 // Figma `GOAL / Arrival`: 마스코트가 시트 뒤에 낮게 있고 색종이는 모여 있다(상태 바 44px를 뺀 좌표).
+// 완주 화면의 색종이와 같은 순서(confetti 1~6)로 짝지어, 도착 → 완주 전환(스마트 애니메이트 0.4초)에서 제자리로 움직인다.
 const ARRIVAL_CONFETTI: typeof CONFETTI = [
-  { left: 323, top: 241.8, w: 16.4, h: 6.8, rotate: -45, color: '#c2f51f' },
-  { left: 345.2, top: 349.6, w: 13.6, h: 6.8, rotate: 25, color: '#c2f51f' },
-  { left: 294.8, top: 402, w: 12.3, h: 6.8, rotate: -20, color: '#c2f51f' },
   { left: 41.5, top: 292.1, w: 16.4, h: 6.8, rotate: 55.55, color: '#c2f51f' },
   { left: 105.8, top: 337.6, w: 13.6, h: 6.8, rotate: -62.57, color: '#ff59a6' },
+  { left: 323, top: 241.8, w: 16.4, h: 6.8, rotate: -45, color: '#c2f51f' },
+  { left: 345.2, top: 349.6, w: 13.6, h: 6.8, rotate: 25, color: '#c2f51f' },
   { left: 84.1, top: 365.6, w: 10.9, h: 6.8, rotate: -40, color: '#ff59a6' },
+  { left: 294.8, top: 402, w: 12.3, h: 6.8, rotate: -20, color: '#c2f51f' },
 ]
+
+// 도착 → 완주 전환: Figma SMART_ANIMATE 0.4초 ease-in-out. 움직임을 줄이도록 설정한 기기에서는 바로 바꾼다.
+export const ARRIVAL_SETTLE_MS = 400
+const SETTLE = 'transition-[left,top,transform,opacity,box-shadow] duration-[400ms] ease-in-out motion-reduce:transition-none'
 
 // 어두운 축하 영역(도착·완주 화면 공통). 위 354px.
 export function CelebrationTop({ arrival = false }: { arrival?: boolean }) {
@@ -48,22 +53,27 @@ export function CelebrationTop({ arrival = false }: { arrival?: boolean }) {
       </div>
       {/* 장식은 390px 기준 좌표를 쓰고 가운데를 맞춰 둔다. 더 좁은 화면에서는 양옆이 조금 잘릴 뿐 레이아웃을 넓히지 않는다. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 w-[390px] -translate-x-1/2 overflow-hidden">
-        {!arrival && (
-          <img src={goalGlow} alt="" aria-hidden="true" className="pointer-events-none absolute left-[203px] top-[316px] h-[43px] w-[56px] max-w-none scale-[2.2]" />
-        )}
-        {arrival ? (
-          <img src={mascotFinish} alt="" aria-hidden="true" className="pointer-events-none absolute left-[166px] top-[256.6px] h-[223px] w-[169px] rotate-[8.77deg] object-contain shadow-[0_4px_4px_rgba(0,0,0,0.25)]" />
-        ) : (
-          <img src={mascotFinish} alt="" aria-hidden="true" className="pointer-events-none absolute left-[158px] top-[155px] h-[223px] w-[169px] object-contain" />
-        )}
-        {(arrival ? ARRIVAL_CONFETTI : CONFETTI).map((piece, index) => (
-          <span
-            key={index}
-            aria-hidden="true"
-            className="pointer-events-none absolute rounded-[1.4px]"
-            style={{ left: piece.left, top: piece.top, width: piece.w, height: piece.h, background: piece.color, transform: `rotate(${piece.rotate}deg)` }}
-          />
-        ))}
+        <img src={goalGlow} alt="" aria-hidden="true" className={`pointer-events-none absolute left-[203px] top-[316px] h-[43px] w-[56px] max-w-none scale-[2.2] ${SETTLE} ${arrival ? 'opacity-0' : 'opacity-100'}`} />
+        <img
+          src={mascotFinish}
+          alt=""
+          aria-hidden="true"
+          className={`pointer-events-none absolute h-[223px] w-[169px] object-contain ${SETTLE}`}
+          style={arrival
+            ? { left: 166, top: 256.6, transform: 'rotate(8.77deg)', boxShadow: '0 4px 4px rgba(0,0,0,0.25)' }
+            : { left: 158, top: 155, transform: 'rotate(0deg)', boxShadow: '0 0 0 rgba(0,0,0,0)' }}
+        />
+        {CONFETTI.map((settled, index) => {
+          const piece = arrival ? ARRIVAL_CONFETTI[index] : settled
+          return (
+            <span
+              key={index}
+              aria-hidden="true"
+              className={`pointer-events-none absolute rounded-[1.4px] ${SETTLE}`}
+              style={{ left: piece.left, top: piece.top, width: piece.w, height: piece.h, background: piece.color, transform: `rotate(${piece.rotate}deg)` }}
+            />
+          )
+        })}
       </div>
     </>
   )
