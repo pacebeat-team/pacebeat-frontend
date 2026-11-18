@@ -23,6 +23,7 @@ import { PermissionsPage } from '../pages/onboarding/PermissionsPage'
 import { GuidePage } from '../pages/measurement/GuidePage'
 import { ActivePage } from '../pages/measurement/ActivePage'
 import { ResultPage } from '../pages/measurement/ResultPage'
+import { ProfileEntryRedirect, ProfileStepGuard } from '../features/profile/components/ProfileStepGuard'
 import { ConsentScreen } from '../features/profile/screens/ConsentScreen'
 import { NicknameScreen } from '../features/profile/screens/NicknameScreen'
 import { DemographicsScreen } from '../features/profile/screens/DemographicsScreen'
@@ -57,24 +58,31 @@ export const router = createBrowserRouter([
         ],
       },
       {
+        // /profile은 지금 상태에 맞는 단계로 보낸다. (가입 전이면 동의 화면)
         path: 'profile',
-        element: <Navigate to={PROFILE_ROUTES.consent} replace />,
+        element: <ProfileEntryRedirect />,
       },
       {
-        path: PROFILE_ROUTES.consent,
-        element: <ConsentScreen />,
-      },
-      {
-        path: PROFILE_ROUTES.nickname,
-        element: <NicknameScreen />,
-      },
-      {
-        path: PROFILE_ROUTES.demographics,
-        element: <DemographicsScreen />,
-      },
-      {
-        path: PROFILE_ROUTES.body,
-        element: <BodyScreen />,
+        // 프로필 단계 화면은 가드 아래에 둔다. 지금 열 수 없는 단계는 먼저 마쳐야 할 단계로 보낸다.
+        element: <ProfileStepGuard />,
+        children: [
+          {
+            path: PROFILE_ROUTES.consent,
+            element: <ConsentScreen />,
+          },
+          {
+            path: PROFILE_ROUTES.nickname,
+            element: <NicknameScreen />,
+          },
+          {
+            path: PROFILE_ROUTES.demographics,
+            element: <DemographicsScreen />,
+          },
+          {
+            path: PROFILE_ROUTES.body,
+            element: <BodyScreen />,
+          },
+        ],
       },
       {
         path: 'home',
