@@ -12,9 +12,11 @@ import dividerIcon from '../assets/home/divider.svg'
 import chevronRight from '../assets/icons/chevron-right.svg'
 import mascot from '../assets/images/mascot-p.png'
 import { confirmGoalForHomeStart } from '../features/home/homeEntry'
+import { buildHomeRecordsView, EMPTY_HOME_RECORDS } from '../features/home/homeRecords'
 import { buildGoalRowValue, buildHeroView, buildWeekRow } from '../features/home/homeView'
 import { RUN_PATHS } from '../features/running/runFlow'
 import { runSetupStore } from '../features/running/runSetupStore'
+import { createRunStorage } from '../features/running/runStorage'
 import { useRunStore } from '../features/running/runStore'
 
 const MEASUREMENT_GUIDE_PATH = '/measurement/guide'
@@ -30,7 +32,7 @@ function ActivityRow({ to, label, value }: { to: string; label: string; value?: 
   )
 }
 
-// Figma `HOME`(03). 저장된 러닝 기록은 읽지 않는다(후속 이슈).
+// Figma `HOME`(03). 저장된 러닝 기록으로 요일 표시와 지난 러닝 행을 채운다.
 // 좁은 화면에서는 마스코트의 왼쪽 위치(189px)를 유지하도록 폭을 줄여 목표 문구와 겹치지 않게 한다.
 // 마운트되면 마스코트가 Low → High → Low를 반복한다(`HOME / Arrival` 진입 연출).
 export function HomePage() {
@@ -39,6 +41,14 @@ export function HomePage() {
   const [now] = useState(() => new Date())
   const hero = buildHeroView(draft.distanceKm, draft.targetDurationSec)
   const week = buildWeekRow(now)
+  // 마운트할 때마다 저장된 기록을 다시 읽는다. 읽을 수 없으면 기록이 없는 것처럼 보인다(오류를 보이지 않는다).
+  const [records] = useState(() => {
+    try {
+      return buildHomeRecordsView(createRunStorage().loadRecords(), now)
+    } catch {
+      return EMPTY_HOME_RECORDS
+    }
+  })
 
   const startRun = () => {
     // 목표 화면을 건너뛰므로 가드가 되돌리지 않게 목표 단계를 확정한다.
@@ -67,14 +77,15 @@ export function HomePage() {
       </h1>
 
       <ol aria-label="이번 주" className="mt-1 flex h-[45px] w-full pt-3">
-        {week.map((day) => (
+        {week.map((day, index) => (
           <li key={day.label} className="flex flex-1 flex-col items-center gap-[2px]" aria-current={day.isToday ? 'date' : undefined}>
             <span
               className={`flex size-[28px] items-center justify-center rounded-full text-[14px] leading-[20px] ${
-                day.isToday ? 'text-ink' : 'text-muted'
-              }`}
+                records.runDays[index] ? 'bg-lime' : ''
+              } ${day.isToday ? 'text-ink' : 'text-muted'}`}
             >
               {day.label}
+              {records.runDays[index] && <span className="sr-only"> 달린 날</span>}
             </span>
             {day.isToday && <img src={todayDot} alt="" aria-hidden="true" className="size-[3px]" />}
           </li>
@@ -138,11 +149,23 @@ export function HomePage() {
         </button>
       </section>
 
-      <nav aria-label="홈 바로가기" className="flex w-full flex-col px-[10px]">
-        <ActivityRow to={RUN_PATHS.goal} label="추천 목표 수정" value={buildGoalRowValue(draft.distanceKm, draft.targetDurationSec)} />
-        <div className="h-px bg-line" aria-hidden="true" />
-        <ActivityRow to={MEASUREMENT_GUIDE_PATH} label="기초 측정 다시 하기" />
-      </nav>
+      <div className="flex w-full flex-col px-[10px]">
+        {records.lastRunText !== null && (
+          // 이동할 화면(06)이 아직 없어 누를 수 없는 정적 행이다(chevron 없음).
+          <>
+            <div className="flex h-[64px] w-full items-center gap-3">
+              <span className="min-w-0 flex-1 text-[16px] leading-[24px] text-ink">지난 러닝</span>
+              <span className="shrink-0 text-right text-[14px] leading-[22px] text-muted">{records.lastRunText}</span>
+            </div>
+            <div className="h-px bg-line" aria-hidden="true" />
+          </>
+        )}
+        <nav aria-label="홈 바로가기" className="flex flex-col">
+          <ActivityRow to={RUN_PATHS.goal} label="추천 목표 수정" value={buildGoalRowValue(draft.distanceKm, draft.targetDurationSec)} />
+          <div className="h-px bg-line" aria-hidden="true" />
+          <ActivityRow to={MEASUREMENT_GUIDE_PATH} label="기초 측정 다시 하기" />
+        </nav>
+      </div>
     </div>
   )
 }
