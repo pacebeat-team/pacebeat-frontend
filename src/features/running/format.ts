@@ -27,3 +27,8 @@ export function formatDurationKorean(sec: number): string {
 export function formatGoalChip(distanceKm: number, durationSec: number): string {
   return `${distanceKm} km · ${formatDuration(durationSec)}`
 }
+
+// 목표 거리: 소수 첫째 자리까지 ("3.0")
+export function formatDistanceKm(distanceKm: number): string {
+  return distanceKm.toFixed(1)
+}

@@ -1,7 +1,9 @@
 import { useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import runMinus from '../../assets/icons/run-minus.svg'
+import runPlus from '../../assets/icons/run-plus.svg'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
-import { formatDuration, formatGoalChip, formatPace } from '../../features/running/format'
+import { formatDistanceKm, formatDuration, formatGoalChip, formatPace } from '../../features/running/format'
 import {
   GOAL_DISTANCES,
   getDurationRangeSec,
@@ -12,6 +14,7 @@ import { RUN_PATHS } from '../../features/running/runFlow'
 import { runSetupStore } from '../../features/running/runSetupStore'
 import { runStore, useRunStore } from '../../features/running/runStore'
 
+// Figma `RUN / Goal`. 기준 페이스가 없어 "내 기준보다 …"·"추천 목표 …으로 바꾸기" 문구는 만들지 않는다.
 export function GoalPage() {
   const navigate = useNavigate()
   const draft = useRunStore((state) => state.draft)
@@ -23,13 +26,10 @@ export function GoalPage() {
     runSetupStore.getState().enterGoal()
   }, [])
 
-  const step = useCallback(
-    (direction: 1 | -1) => {
-      const { draft: current } = runStore.getState()
-      runStore.getState().setTargetDuration(stepDurationSec(current.distanceKm, current.targetDurationSec, direction))
-    },
-    [],
-  )
+  const step = useCallback((direction: 1 | -1) => {
+    const { draft: current } = runStore.getState()
+    runStore.getState().setTargetDuration(stepDurationSec(current.distanceKm, current.targetDurationSec, direction))
+  }, [])
 
   const handleNext = useCallback(() => {
     runSetupStore.getState().confirmGoal()
@@ -38,84 +38,91 @@ export function GoalPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace">
-      <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-4 pt-6">
-        <h1 className="text-[36px] font-light leading-[44px] tracking-[-1.08px] text-ink">
-          어떻게 달릴까요?
-        </h1>
+      <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-6 pt-3 [&>*]:shrink-0">
+        <p className="text-[23.5px] font-bold leading-[29px] text-ink">P!PACE</p>
+        <h1 className="mt-4 text-[32px] font-light leading-[44px] tracking-[-0.96px] text-ink">어떻게 달릴까요?</h1>
 
-        <div role="radiogroup" aria-label="목표 거리" className="mt-6 flex gap-2">
-          {GOAL_DISTANCES.map((km) => (
+        <section
+          aria-label="목표 설정"
+          className="relative mt-4 flex w-full shrink-0 flex-col overflow-hidden rounded-[34px] bg-[linear-gradient(143.35deg,#c7fb29_1.09%,#d8ff7f_98.91%)] p-[22px] shadow-[inset_0_-3px_5px_rgba(71,102,13,0.16),inset_0_1.5px_2px_rgba(255,255,232,0.5)]"
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(263px_224px_at_100%_0,rgba(255,255,224,0.38)_0%,rgba(255,255,229,0.12)_55%,rgba(255,255,229,0)_100%)]"
+          />
+          <div role="radiogroup" aria-label="목표 거리" className="relative flex h-[44px] gap-2">
+            {GOAL_DISTANCES.map((km) => (
+              <button
+                key={km}
+                type="button"
+                role="radio"
+                aria-checked={km === distanceKm}
+                onClick={() => runStore.getState().setDistance(km)}
+                className={`flex h-[44px] flex-1 cursor-pointer items-center justify-center rounded-[22px] text-[15px] font-medium leading-[21px] ${
+                  km === distanceKm ? 'bg-ink text-app-bg' : 'bg-app-bg text-ink'
+                }`}
+              >
+                {km} km
+              </button>
+            ))}
+          </div>
+
+          <p className="relative mt-[18px] flex h-[81px] items-baseline gap-[6px] text-ink">
+            <span className="inline-block min-w-[93px] text-[70px] font-light leading-[81px] tracking-[-2.1px]">{formatDistanceKm(distanceKm)}</span>
+            <span className="text-[24px] leading-[29px]">km</span>
+          </p>
+
+          <div className="relative mt-[10px] flex h-[54px] items-center gap-[10px]">
+            <p className="text-[15px] leading-[21px] text-ink">완주 시간</p>
+            <div className="flex-1" />
             <button
-              key={km}
               type="button"
-              role="radio"
-              aria-checked={km === distanceKm}
-              onClick={() => runStore.getState().setDistance(km)}
-              className={`h-[40px] flex-1 cursor-pointer rounded-full text-[15px] font-medium ${
-                km === distanceKm ? 'bg-ink text-app-bg' : 'bg-soft text-ink'
-              }`}
-            >
-              {km} km
-            </button>
-          ))}
-        </div>
-
-        <p className="mt-6 text-[76px] font-light leading-[94px] tracking-[-2.28px] text-ink">
-          {distanceKm}
-          <span className="ml-2 text-[24px] tracking-normal text-muted">km</span>
-        </p>
-
-        <section className="mt-4 rounded-[24px] bg-soft p-4" aria-label="완주 시간">
-          <p className="text-[14px] leading-5 text-muted">완주 시간</p>
-          <div className="mt-2 flex items-center justify-between">
-            <button
-              type="button"
-              aria-label="1단위 줄이기"
+              aria-label="완주 시간 줄이기"
               disabled={targetDurationSec <= range.min}
               onClick={() => step(-1)}
-              className="flex size-[44px] cursor-pointer items-center justify-center rounded-full bg-app-bg text-[24px] text-ink disabled:cursor-not-allowed disabled:text-disabled-text"
+              className="flex size-[44px] shrink-0 cursor-pointer items-center justify-center rounded-[22px] bg-app-bg disabled:cursor-not-allowed disabled:opacity-40"
             >
-              −
+              <img src={runMinus} alt="" className="size-[22px]" aria-hidden="true" />
             </button>
             <button
               type="button"
               aria-label="완주 시간 선택"
               onClick={() => navigate(RUN_PATHS.time)}
-              className="cursor-pointer text-[40px] font-light leading-[48px] text-ink"
+              className="cursor-pointer text-[29px] font-medium leading-[40px] text-ink"
             >
               {formatDuration(targetDurationSec)}
             </button>
             <button
               type="button"
-              aria-label="1단위 늘리기"
+              aria-label="완주 시간 늘리기"
               disabled={targetDurationSec >= range.max}
               onClick={() => step(1)}
-              className="flex size-[44px] cursor-pointer items-center justify-center rounded-full bg-app-bg text-[24px] text-ink disabled:cursor-not-allowed disabled:text-disabled-text"
+              className="flex size-[44px] shrink-0 cursor-pointer items-center justify-center rounded-[22px] bg-app-bg disabled:cursor-not-allowed disabled:opacity-40"
             >
-              +
+              <img src={runPlus} alt="" className="size-[22px]" aria-hidden="true" />
             </button>
           </div>
-          <p className="mt-2 text-[14px] leading-5 text-muted">
-            목표 페이스{' '}
-            <span className="font-medium text-ink">
-              {formatPace(getTargetPaceSecPerKm(distanceKm, targetDurationSec))} /km
-            </span>
+
+          <p className="relative mt-[14px] whitespace-pre text-[17px] font-medium leading-[26px] text-ink">
+            {`목표 페이스  ${formatPace(getTargetPaceSecPerKm(distanceKm, targetDurationSec))} /km`}
           </p>
         </section>
 
+        <PrimaryButton label="다음 · 음악 고르기" onClick={handleNext} className="mt-[18px] shrink-0" />
+
         {recentGoals.length > 0 && (
-          <section className="mt-6" aria-label="최근 목표">
-            <h2 className="text-[14px] leading-5 text-muted">최근 목표</h2>
-            <ul className="mt-2 flex gap-2">
+          <section aria-label="최근 목표" className="mt-5">
+            <h2 className="text-[15px] font-medium leading-[21px] text-ink">최근 목표</h2>
+            <ul className="flex gap-[10px]">
               {recentGoals.map((goal) => (
-                <li key={`${goal.distanceKm}-${goal.targetDurationSec}`}>
+                <li key={`${goal.distanceKm}-${goal.targetDurationSec}`} className="flex-1">
                   <button
                     type="button"
                     onClick={() => {
                       runStore.getState().setDistance(goal.distanceKm)
                       runStore.getState().setTargetDuration(goal.targetDurationSec)
                     }}
-                    className="h-[36px] cursor-pointer rounded-full border border-line px-4 text-[14px] text-ink"
+                    className="flex h-[44px] w-full cursor-pointer items-center justify-center rounded-[22px] bg-soft text-[15px] font-medium leading-[21px] text-ink"
                   >
                     {formatGoalChip(goal.distanceKm, goal.targetDurationSec)}
                   </button>
@@ -124,10 +131,6 @@ export function GoalPage() {
             </ul>
           </section>
         )}
-      </div>
-
-      <div className="px-3 pb-3">
-        <PrimaryButton label="다음 · 음악 고르기" onClick={handleNext} />
       </div>
     </div>
   )

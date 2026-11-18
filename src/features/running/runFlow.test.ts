@@ -7,7 +7,7 @@ import { createRunStorage } from './runStorage.ts'
 import { MUSIC_TRACKS, findMusicTrack, formatTrackBpm } from './music.ts'
 import { readFileSync } from 'node:fs'
 import { buildTimeRows } from './timePicker.ts'
-import { formatDuration, formatDurationKorean, formatGoalChip, formatPace } from './format.ts'
+import { formatDistanceKm, formatDuration, formatDurationKorean, formatGoalChip, formatPace } from './format.ts'
 
 describe('경로 접근 규칙', () => {
   test('목표 화면은 언제나 접근할 수 있다', () => {
@@ -169,12 +169,27 @@ describe('표시 형식', () => {
     assert.equal(formatPace(420), '7:00')
     assert.equal(formatDurationKorean(1260), '21분')
     assert.equal(formatDurationKorean(450), '7분 30초')
+    assert.equal(formatDistanceKm(3), '3.0')
+    assert.equal(formatDistanceKm(1), '1.0')
   })
 })
 
 describe('Figma 대조 화면 구조(소스 확인)', () => {
   const read = (name: string) => readFileSync(new URL(`../../pages/running/${name}`, import.meta.url), 'utf8')
 
+  test('Ready: 러닝 시작(주)이 위, GPS 없이 시간만 기록(보조)이 아래이고, 위치 불가여도 순서를 바꾸지 않는다', () => {
+    const source = read('ReadyPage.tsx')
+    const footer = source.slice(source.indexOf('<RunFooter'))
+    assert.ok(footer.indexOf('label="러닝 시작"') < footer.indexOf('GPS 없이 시간만 기록'))
+    assert.match(footer, /disabled=\{actions\.startDisabled\}/)
+    assert.ok(!footer.includes('PrimaryButton label="GPS 없이 시간만 기록"'), '시간 기록 버튼을 주 버튼 자리로 올리지 않는다')
+    assert.match(source, /signalStart\('time'\)/)
+    assert.ok(!source.includes('timeOnlyMode'))
+  })
+  test('Ready: 시간 기록 안내 문구는 하단 버튼 영역이 아니라 본문에 있다', () => {
+    const source = read('ReadyPage.tsx')
+    assert.ok(source.indexOf('시간만 기록하면 목표 거리·시간은 적용되지 않아요.') < source.indexOf('<RunFooter'))
+  })
   test('음악 미리 듣기: Figma 안내 문구 원문이고 하단 버튼은 이 곡으로 준비하기(주)·다른 곡 고르기(보조) 순서이다', () => {
     const source = read('MusicPreviewPage.tsx')
     assert.match(source, /인터랙션 시안에서는 음악이 재생되지 않아요\./)
@@ -187,5 +202,9 @@ describe('Figma 대조 화면 구조(소스 확인)', () => {
     assert.match(source, /px-3 pt-2/)
     assert.match(source, /calc\(20px-env\(safe-area-inset-bottom/)
     assert.match(source, /calc\(36px-env\(safe-area-inset-bottom/)
+  })
+  test('Music 목록의 마지막 곡 아래에는 구분선이 없고, 시간 선택 목록도 같다', () => {
+    assert.match(read('MusicPage.tsx'), /border-b border-line last:border-b-0/)
+    assert.match(read('TimePickerPage.tsx'), /border-b border-line last:border-b-0/)
   })
 })
