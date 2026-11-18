@@ -1,45 +1,19 @@
 import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { RUN_PATHS } from '../../features/running/runFlow'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
-import { TextButton } from '../../components/common/TextButton'
-import { runLive } from '../../features/running/runLive'
-import { runSetupStore } from '../../features/running/runSetupStore'
 import { formatPace } from '../../features/running/format'
 import { REFLECTION_MEMO_MAX } from '../../features/running/reflection'
 import { runResultStore, useRunResultStore } from '../../features/running/runResultStore'
 import type { RunSplit } from '../../features/running/types'
-import { DIFFICULTY_OPTIONS, REASON_OPTIONS, SAVE_ERROR_TEXT, useSaveAndGo, useTooShortResult } from './resultHooks'
+import { DIFFICULTY_OPTIONS, REASON_OPTIONS, useSaveAndGo } from './resultHooks'
 
 // 결과 화면 공용 조각(#47). Figma `RESULT / *` 의 같은 요소를 한 번만 만든다.
 
 export function SaveFooter({ label = '저장하고 홈으로', destination = '/home', inset = false }: { label?: string; destination?: string; inset?: boolean }) {
-  const navigate = useNavigate()
   const saveAndGo = useSaveAndGo()
   const saving = useRunResultStore((state) => state.saving)
-  const error = useRunResultStore((state) => state.saveError)
-  // 1분보다 짧은 결과는 저장할 수 없다: 저장을 눌러 보기 전에 알리고 버튼을 막는다.
-  const tooShort = useTooShortResult() || error === 'too-short'
   return (
     <div className={`flex shrink-0 flex-col pt-2 pb-[max(0px,calc(31px-env(safe-area-inset-bottom,0px)))] ${inset ? 'px-6' : 'px-3'}`}>
-      {(error !== null || tooShort) && (
-        <p role="alert" className="px-3 pb-2 text-center text-[14px] leading-5 text-[#b3261e]">
-          {tooShort ? '1분보다 짧은 러닝은 기록으로 남길 수 없어요.' : SAVE_ERROR_TEXT}
-        </p>
-      )}
-      <PrimaryButton label={label} disabled={saving || tooShort} onClick={() => saveAndGo(destination)} />
-      {tooShort && (
-        <TextButton
-          label="저장하지 않고 나가기"
-          onClick={() => {
-            // 1분보다 짧아 기록할 수 없는 결과를 정리한다(복원된 결과가 갇히지 않게 한다).
-            runLive.discard()
-            runResultStore.getState().finalize()
-            runSetupStore.getState().reset()
-            navigate(RUN_PATHS.goal, { replace: true })
-          }}
-        />
-      )}
+      <PrimaryButton label={label} disabled={saving} onClick={() => saveAndGo(destination)} />
     </div>
   )
 }

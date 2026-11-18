@@ -15,7 +15,7 @@ import type { DistanceSample, GoalDistanceKm, RunMode } from './types.ts'
 // - 목표 draft·최근 목표·선택 음악, 활성 세션 상태를 가진다. 파생값(경과 시간, 페이스 등)은 저장하지 않는다.
 // - 저장은 전용 키(pacebeat:run:*:v1)에만 한다. 저장이 실패해도 메모리 상태는 유지한다(예외를 던지지 않는다).
 //   저장 실패를 알아야 하는 기록 저장(records)은 Store가 아니라 RunStorage.saveRecord를 직접 쓴다.
-// - 저장된 세션은 생성할 때 읽어 넣지 않는다. 새로고침 복원은 runLive.restore가 명시적으로 한다(restoreSession).
+// - 저장된 세션은 생성할 때 읽어 넣지 않는다.
 
 const MAX_RECENT_GOALS = 2
 
@@ -67,8 +67,6 @@ interface RunStoreActions {
   recordDistanceSample: (elapsedMs: number, distanceM: number) => void
   // 세션 상태를 지운다(저장을 마쳤거나 폐기할 때).
   clearSession: () => void
-  // 저장된 세션을 상태로 되돌린다(새로고침 복원). 이미 활성 세션이 있으면 아무것도 하지 않는다.
-  restoreSession: (snapshot: RunSessionSnapshot) => void
   // 마지막으로 확인한 시각을 기록한다(진행 중 세션만). 복원 때 일시정지 시각의 기준이 된다.
   touchSession: (now: number) => void
   // GPS 신호가 끊긴 구간을 연다(러닝 경과 시간 ms). 이미 열린 구간이 있으면 아무것도 하지 않는다.
@@ -186,7 +184,6 @@ export function createRunStore(storage: RunStorage = createRunStorage(), options
             },
       ),
     clearSession: () => set({ activeSession: null }),
-    restoreSession: (snapshot) => set(({ activeSession }) => (activeSession === null ? { activeSession: snapshot } : {})),
     touchSession: (now) =>
       set(({ activeSession }) =>
         activeSession === null || activeSession.session.status !== 'running' || !Number.isFinite(now)

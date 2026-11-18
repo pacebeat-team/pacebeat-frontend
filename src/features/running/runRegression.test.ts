@@ -8,7 +8,6 @@ import { getRunSessionPhase, isArrivalPending, resolveGuardPhase, resolveRunRedi
 import { createRunLive, selectLiveMetrics } from './runLive.ts'
 import type { GpsPermission } from './runLive.ts'
 import { computeAvgPaceSecPerKm } from './runPace.ts'
-import { decideRestore } from './runRestore.ts'
 import { createRunResultStore } from './runResultStore.ts'
 import { summarizeRun } from './runResult.ts'
 import { createRunSetupStore } from './runSetupStore.ts'
@@ -105,7 +104,6 @@ function harness(options: HarnessOptions = {}): Harness {
   let permissionOnChange: (state: GpsPermission) => void = () => undefined
   const controller = createRunLive({
     store,
-    storage,
     now: () => now,
     createSource: (h) => {
       handlers = h
@@ -487,26 +485,6 @@ describe('저장 후 상태·라우팅', () => {
     assert.equal(h.result.getState().save(), true)
     assert.equal(h.storage.loadRecords().length, 1)
   })
-  test('저장 직후(정리 전) 새로고침: 종료된 세션이 복원되고 다시 저장해도 한 건이다', () => {
-    const first = harness()
-    finishAndSave(first, 'time')
-    assert.ok(first.storage.loadSession() !== null) // 아직 정리 전: 세션 키가 남아 있다
-    const second = harness({ kv: first.mem })
-    second.clock.set(BASE + 200_000)
-    assert.equal(second.controller.restore(), 'finished')
-    assert.equal(second.store.getState().activeSession?.session.status, 'finished')
-    assert.equal(second.result.getState().save(), true)
-    assert.equal(second.storage.loadRecords().length, 1)
-  })
-  test('60초 미만 결과는 저장되지 않고(too-short) 입력은 유지된다', () => {
-    const h = harness()
-    h.controller.begin('time')
-    h.clock.advance(30_000)
-    h.controller.stop('user')
-    assert.equal(h.result.getState().save(), false)
-    assert.equal(h.result.getState().saveError, 'too-short')
-    assert.equal(h.storage.loadRecords().length, 0)
-  })
 })
 
 describe('GPS 일시정지·재개와 gap', () => {
@@ -539,46 +517,6 @@ describe('GPS 일시정지·재개와 gap', () => {
     h.controller.pause()
     assert.equal(h.store.getState().activeSession?.lastSeenAt, h.clock.now())
     assert.equal(h.store.getState().activeSession?.session.id, 'sess-1')
-  })
-})
-
-describe('복원: 24시간 만료와 미래 시각', () => {
-  const running = (lastSeenAt: number | null, startedAt = BASE) => ({
-    mode: 'time' as const,
-    goal: { targetDistanceKm: null, targetDurationSec: null },
-    musicTrackId: null,
-    session: { id: 's', status: 'running' as const, startedAt, endedAt: null, endReason: null, pauses: [] },
-    distanceSamples: [],
-    gpsGaps: [],
-    lastSeenAt,
-  })
-  test('마지막 확인 뒤 24시간이 지났으면 폐기하고, 24시간 이내면 복원한다', () => {
-    const day = 24 * 3_600_000
-    assert.equal(decideRestore(running(BASE + 1000), BASE + 1000 + day + 1).kind, 'discard')
-    assert.equal(decideRestore(running(BASE + 1000), BASE + 1000 + day).kind, 'restore')
-  })
-  test('저장된 확인 시각이 미래(기기 시계가 되돌려짐)여도 일시정지 시각은 지금을 넘지 않는다', () => {
-    const decision = decideRestore(running(BASE + 10 * 3_600_000), BASE + 60_000)
-    assert.equal(decision.kind, 'restore')
-    if (decision.kind === 'restore') {
-      const pause = decision.snapshot.session.pauses[0]
-      assert.ok(pause !== undefined)
-      assert.ok(pause.pausedAt <= BASE + 60_000, '일시정지 시각이 미래가 아니다')
-    }
-  })
-  test('손상된 저장값(JSON 깨짐)은 폐기하고 앱은 정상 시작한다', () => {
-    const mem = memory({ [RUN_STORAGE_KEYS.session]: '{깨짐' })
-    const h = harness({ kv: mem })
-    assert.equal(h.controller.restore(), 'none')
-    assert.equal(mem.map.has(RUN_STORAGE_KEYS.session), false)
-  })
-  test('endedAt이 없는 종료 스냅샷은 저장소 검증에서 걸러져 결과 화면에 갇히지 않는다', () => {
-    const snapshot = running(BASE)
-    const broken = { ...snapshot, session: { ...snapshot.session, status: 'finished', endReason: 'manual' } }
-    const mem = memory({ [RUN_STORAGE_KEYS.session]: JSON.stringify({ version: 1, data: broken }) })
-    const h = harness({ kv: mem })
-    assert.equal(h.controller.restore(), 'none')
-    assert.equal(h.store.getState().activeSession, null)
   })
 })
 

@@ -1,6 +1,5 @@
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import chevronRight from '../../assets/icons/chevron-right.svg'
-import { ScreenHeader } from '../../components/common/ScreenHeader'
 import { formatClock, formatDistanceKm2, formatDuration, formatPaceOrDash } from '../../features/running/format'
 import { RUN_PATHS } from '../../features/running/runFlow'
 import { getPaceKeepPercent, getTargetTimeDeltaSec } from '../../features/running/runResult'
@@ -18,7 +17,6 @@ function deltaText(deltaSec: number, targetSec: number): string {
 
 // Figma `RESULT / Details`: 완주 결과의 구간별 기록과 다음 목표.
 export function ResultDetailsPage() {
-  const navigate = useNavigate()
   const finished = useFinishedRun()
   if (finished === null || finished.summary.completion !== 'goal') return <Navigate to={RUN_PATHS.result} replace />
   const { summary } = finished
@@ -31,7 +29,7 @@ export function ResultDetailsPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace text-ink">
       <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-6 pt-3 [&>*]:shrink-0">
-        <ScreenHeader title="구간별 기록" onBack={() => navigate(RUN_PATHS.result, { replace: true })} />
+        <p className="text-[23.5px] font-bold leading-[29px]">P!PACE</p>
         <h1 className="mt-4 text-[34px] font-light leading-[44px] tracking-[-1.02px]">{targetKm} km, 끝까지!</h1>
         {delta !== null && <p className="mt-4 text-[15px] leading-6 text-muted">{deltaText(delta, targetSec)}</p>}
         <div className="mt-5">

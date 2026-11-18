@@ -1,5 +1,4 @@
 import { clampDurationSec, getDefaultDurationSec, isGoalDistance, isValidDurationSec } from './goal.ts'
-import { canSaveRun } from './policy.ts'
 import { isValidReflection } from './reflection.ts'
 import type { RunSessionData } from './runSession.ts'
 import type {
@@ -32,8 +31,8 @@ export interface RunKeyValueStorage {
   removeItem: (key: string) => void
 }
 
-// too-short: 60초 미만이라 저장할 수 없음 / unavailable: 저장소를 쓸 수 없음 / write-failed: 쓰기·삭제 실패(용량 초과 등)
-export type RunStorageErrorCode = 'too-short' | 'unavailable' | 'write-failed'
+// unavailable: 저장소를 쓸 수 없음 / write-failed: 쓰기·삭제 실패(용량 초과 등)
+export type RunStorageErrorCode = 'unavailable' | 'write-failed'
 
 export class RunStorageError extends Error {
   readonly code: RunStorageErrorCode
@@ -181,7 +180,7 @@ export interface RunStorage {
   clearSession: () => void
   loadRecords: () => RunRecord[]
   getRecord: (recordId: string) => RunRecord | null
-  // 같은 recordId는 덮어쓴다(중복 생성 없음). 60초 미만은 저장하지 않는다(RunStorageError 'too-short').
+  // 같은 recordId는 덮어쓴다(중복 생성 없음).
   saveRecord: (record: RunRecord) => void
 }
 
@@ -272,7 +271,6 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
     loadRecords,
     getRecord: (recordId) => loadRecords().find((record) => record.recordId === recordId) ?? null,
     saveRecord: (record) => {
-      if (!canSaveRun(record.result.elapsedMs)) throw new RunStorageError('too-short')
       const saved = loadRecords()
       const exists = saved.some((item) => item.recordId === record.recordId)
       // 같은 recordId는 제자리에서 덮어쓴다. 새 기록은 끝에 추가한다.

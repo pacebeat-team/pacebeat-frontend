@@ -111,14 +111,6 @@ describe('시작·일시정지·종료', () => {
     assert.equal(t.store.getState().activeSession?.session.endReason, 'user')
     assert.equal(t.sourceRunning, false)
   })
-  test('discard는 세션을 지우고 저장 키도 지운다', () => {
-    const t = setup()
-    t.controller.begin('time')
-    assert.ok(t.map.has('pacebeat:run:session:v1'))
-    t.controller.discard()
-    assert.equal(t.store.getState().activeSession, null)
-    assert.equal(t.map.has('pacebeat:run:session:v1'), false)
-  })
 })
 
 describe('GPS 거리 누적과 목표 도달', () => {

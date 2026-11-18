@@ -9,7 +9,6 @@ import { RUN_PATHS } from '../../features/running/runFlow'
 import { runLive, selectLiveMetrics, useRunLive } from '../../features/running/runLive'
 import { getGoalProgress, getRequiredPaceSecPerKm } from '../../features/running/runProgress'
 import { useRunStore } from '../../features/running/runStore'
-import { describeGpsStatus } from '../../features/running/gpsStatus'
 import { RunFooter } from './RunFooter'
 import { useBlockBack, useRunClock } from './useRunClock'
 
@@ -43,7 +42,7 @@ export function ActivePage() {
             {formatClock(metrics.elapsedMs)}
           </p>
           {isTime ? (
-            <p className="text-[17px] leading-[26px]">시간만 기록하고 있어요</p>
+            <p className="text-[17px] leading-[26px]">GPS 없이 시간만 기록했어요.</p>
           ) : (
             <p className="text-[17px] leading-[26px]">
               {formatDistanceKm2(metrics.distanceM ?? 0)} km · 평균 {formatPaceOrDash(metrics.avgPaceSecPerKm)} /km
@@ -67,22 +66,12 @@ export function ActivePage() {
               </div>
             </div>
           )}
-          <p className="mt-[31px] text-[23px] leading-[34px]">러닝을 잠시 멈췄어요.</p>
+          <p className={`${isTime ? 'mt-[62px]' : 'mt-[31px]'} text-[23px] leading-[34px]`}>러닝을 잠시 멈췄어요.</p>
           <p className="mt-[16px] text-[15px] leading-6 text-muted">준비되면 계속 달릴 수 있어요.</p>
           <p className="mt-[21px] text-[16px] leading-[25px] text-muted">
-            {isTime ? (
-              <>
-                끝내면 달린 시간이
-                <br />
-                기록으로 남아요.
-              </>
-            ) : (
-              <>
-                목표 전에 끝내도
-                <br />
-                달린 만큼의 기록은 남아요.
-              </>
-            )}
+            목표 전에 끝내도
+            <br />
+            달린 만큼의 기록은 남아요.
           </p>
 
         </div>
@@ -97,9 +86,9 @@ export function ActivePage() {
   // Figma `RUNNING / 01`: 상태 바(44) 아래 위 18·좌우 14 패딩, 이어서 12 · 가이드 116 · 8 · 거리 161 · 2 · 진행 78 · 24 · 지표 78 · 28 · 조작 114.
   const guideText = isTime ? (
     <>
-      시간만 기록하며
+      시간을 기록하며
       <br />
-      달리고 있어요.
+      편하게 달려요.
     </>
   ) : (
     <>
@@ -124,7 +113,7 @@ export function ActivePage() {
         {isTime ? (
           <div className="flex h-[161px] flex-col justify-center pl-3 [@media(max-height:700px)]:h-[84px]">
             <p
-              className={`font-light tracking-[3px] ${metrics.elapsedMs >= 3_600_000 ? 'text-[76px] leading-[96px] [@media(max-height:700px)]:text-[56px] [@media(max-height:700px)]:leading-[84px]' : 'text-[108px] leading-[132px] [@media(max-height:700px)]:text-[64px] [@media(max-height:700px)]:leading-[84px]'}`}
+              className={`font-light tracking-[3px] ${metrics.elapsedMs >= 3_600_000 ? 'text-[76px] leading-[96px] [@media(max-height:700px)]:text-[56px] [@media(max-height:700px)]:leading-[84px]' : 'text-[90px] leading-[132px] [@media(max-height:700px)]:text-[64px] [@media(max-height:700px)]:leading-[84px]'}`}
             >
               {formatClock(metrics.elapsedMs)}
             </p>
@@ -173,23 +162,25 @@ export function ActivePage() {
         <div className="flex h-[78px] px-[10px]">
           <div className="relative flex h-[78px] w-full max-w-[342px] gap-[29px]">
             <div className="flex min-w-0 flex-[162_1_0%] flex-col">
-              <p className="text-[14px] font-medium leading-5">{isTime ? '거리' : '경과 시간'}</p>
-              <p className="h-[58px] text-[42px] leading-[58px] tracking-[0.5px]">{isTime ? '—' : formatClock(metrics.elapsedMs)}</p>
+              <p className="text-[14px] font-medium leading-5">{isTime ? 'GPS 상태' : '경과 시간'}</p>
+              {isTime ? (
+                <p className="h-[58px] text-[24px] leading-[58px] tracking-[0.5px]">사용 안 함</p>
+              ) : (
+                <p className="h-[58px] text-[42px] leading-[58px] tracking-[0.5px]">{formatClock(metrics.elapsedMs)}</p>
+              )}
             </div>
             <div className="flex min-w-0 flex-[151_1_0%] flex-col whitespace-nowrap">
-              <p className="text-[14px] font-medium leading-5">현재 페이스</p>
+              <p className="text-[14px] font-medium leading-5">{isTime ? '거리 · 페이스' : '현재 페이스'}</p>
               <p className="flex h-[58px] items-baseline gap-[5px]">
-                <span className="text-[42px] leading-[58px] tracking-[0.5px]">{formatPaceOrDash(metrics.currentPaceSecPerKm)}</span>
-                {metrics.currentPaceSecPerKm !== null && <span className="text-[20px] leading-[28px]">/km</span>}
+                <span className="text-[42px] leading-[58px] tracking-[0.5px]">{isTime ? '—' : formatPaceOrDash(metrics.currentPaceSecPerKm)}</span>
+                {!isTime && metrics.currentPaceSecPerKm !== null && <span className="text-[20px] leading-[28px]">/km</span>}
               </p>
             </div>
             <span aria-hidden="true" className="absolute left-[calc((100%-29px)*0.5176+1px)] top-[5px] h-[60px] w-[0.8px] bg-ink" />
           </div>
         </div>
-        {/* Figma의 지표와 조작 사이 28px 여백. GPS 신호 상태(Figma에 없는 기능 안내)를 이 여백 안에 둔다. */}
-        <p role="status" className="flex h-[28px] items-center [@media(max-height:700px)]:h-5 justify-center text-[13px] leading-5 text-[#50563b]">
-          {isTime ? 'GPS 사용 안 함' : describeGpsStatus(metrics.gpsSignal, active.gpsGaps, metrics.elapsedMs)}
-        </p>
+        {/* Figma의 지표와 조작 사이 28px 여백 */}
+        <div className="h-[28px] [@media(max-height:700px)]:h-5" />
       </div>
       {/* 일시정지·종료는 작은 화면에서도 스크롤 없이 누를 수 있도록 고정 영역에 둔다. */}
       <div className="flex shrink-0 justify-center pb-6 [@media(max-height:700px)]:pb-2">

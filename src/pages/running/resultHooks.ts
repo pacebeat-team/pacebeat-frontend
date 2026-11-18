@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { runResultStore } from '../../features/running/runResultStore'
 import { isFinishedSnapshot, summarizeRun } from '../../features/running/runResult'
 import type { RunSummary } from '../../features/running/runResult'
-import { canSaveRun } from '../../features/running/policy'
 import { useRunStore } from '../../features/running/runStore'
 import type { ReflectionDifficulty, ReflectionReason } from '../../features/running/types'
 
@@ -19,8 +18,6 @@ export const REASON_OPTIONS: readonly { value: ReflectionReason; label: string }
   { value: 'boredom', label: '지루함' },
   { value: 'time', label: '시간 부족' },
 ]
-
-export const SAVE_ERROR_TEXT = '저장하지 못했어요. 다시 시도해 주세요.' // TODO: 임시 문구(디자인 확인 필요)
 
 // 종료된 세션의 결과 요약. 세션이 바뀌면 결과 입력 상태를 맞춘다.
 export function useFinishedRun(): { summary: RunSummary; sessionId: string } | null {
@@ -45,11 +42,3 @@ export function useSaveAndGo() {
   }
 }
 
-
-// 종료된 결과가 1분보다 짧아 기록할 수 없는가
-export function useTooShortResult(): boolean {
-  const snapshot = useRunStore((state) => state.activeSession)
-  if (!isFinishedSnapshot(snapshot)) return false
-  const summary = summarizeRun(snapshot)
-  return summary !== null && !canSaveRun(summary.elapsedMs)
-}

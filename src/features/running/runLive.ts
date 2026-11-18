@@ -4,19 +4,15 @@ import type { StoreApi } from 'zustand/vanilla'
 import { createGeolocationSource } from '../measurement/geolocationSource.ts'
 import type { GpsSource, GpsSourceHandlers } from '../measurement/geolocationSource.ts'
 import { applyGpsError, getGpsStatus, processFix } from '../measurement/gpsTracker.ts'
-import { createMetrics } from '../measurement/metrics.ts'
 import { createSessionId } from '../measurement/session.ts'
 import type { GpsErrorReason, RawFix } from '../measurement/types.ts'
 import { isGoalReached } from './policy.ts'
-import { decideRestore } from './runRestore.ts'
 import { createGpsRunState, feedGpsFix, getGpsRunMetrics, getTimeRunMetrics } from './runMetrics.ts'
 import type { GpsRunState, RunLiveMetrics } from './runMetrics.ts'
 import { getRunElapsedMs } from './runSession.ts'
 import type { RunEndReason } from './runSession.ts'
 import { runStore } from './runStore.ts'
 import type { RunStoreState } from './runStore.ts'
-import { createRunStorage } from './runStorage.ts'
-import type { RunStorage } from './runStorage.ts'
 import type { RunMode } from './types.ts'
 
 // 러닝 실행 중 상태(저장하지 않는 값)와 위치 수집 연결.
@@ -47,7 +43,6 @@ export interface RunLiveDeps {
   readonly queryPermission?: (onChange: (state: GpsPermission) => void) => Promise<GpsPermission>
   // 화면이 숨겨지거나 페이지를 떠날 때 호출되는 콜백을 등록한다. 해제 함수를 돌려준다. 기본은 visibilitychange(hidden)·pagehide.
   readonly listenHide?: (callback: () => void) => () => void
-  readonly storage?: RunStorage
   readonly now?: () => number
   readonly createSource?: (handlers: GpsSourceHandlers) => GpsSource
   readonly createId?: () => string
@@ -61,8 +56,6 @@ export interface PrepareOptions {
   // 위치를 쓸 수 없어(권한 거부·비보안·미지원) 시작할 수 없을 때 호출한다.
   readonly onUnavailable: (reason: GpsErrorReason) => void
 }
-
-export type RestoreOutcome = 'none' | 'discarded' | 'paused' | 'finished'
 
 function defaultListenVisible(callback: () => void): () => void {
   if (typeof document === 'undefined') return () => undefined
@@ -100,7 +93,6 @@ async function defaultQueryPermission(onChange: (state: GpsPermission) => void):
 export function createRunLive(deps: RunLiveDeps = {}) {
   const runs = deps.store ?? runStore
   const clock = deps.now ?? Date.now
-  const storage = deps.storage ?? createRunStorage()
   const createSource = deps.createSource ?? ((handlers) => createGeolocationSource(handlers))
   const createId = deps.createId ?? createSessionId
   const listenVisible = deps.listenVisible ?? defaultListenVisible
@@ -329,43 +321,6 @@ export function createRunLive(deps: RunLiveDeps = {}) {
       const now = clock()
       stopRunInternal(now, reason)
       live.setState({ now })
-    },
-    // 저장하지 않고 종료(세션 폐기).
-    discard(): void {
-      prepareId += 1
-      stopSource()
-      stopMonitoring()
-      runs.getState().clearSession()
-      live.setState({ gps: createGpsRunState(), now: clock() })
-    },
-    // 새로고침 뒤 저장된 세션을 되살린다(앱을 열 때 한 번). 저장소가 막혔거나 저장값이 손상됐어도 앱을 깨뜨리지 않는다.
-    restore(): RestoreOutcome {
-      if (runs.getState().activeSession !== null) return 'none'
-      let decision
-      try {
-        decision = decideRestore(storage.loadSession(), clock())
-      } catch {
-        storage.clearSession()
-        return 'none'
-      }
-      if (decision.kind === 'none') {
-        // 읽지 못한(손상된) 저장값이 남아 있으면 지운다.
-        storage.clearSession()
-        return 'none'
-      }
-      if (decision.kind === 'discard') {
-        storage.clearSession()
-        return 'discarded'
-      }
-      const { snapshot } = decision
-      runs.getState().restoreSession(snapshot)
-      // 이미 쌓인 유효 거리는 그대로 이어간다(새 구간으로 이어지며 좌표 검증은 다시 시작한다).
-      const last = snapshot.distanceSamples[snapshot.distanceSamples.length - 1]
-      live.setState({
-        gps: { tracker: createGpsRunState().tracker, metrics: { ...createMetrics(), distanceM: last?.distanceM ?? 0, validMs: last?.elapsedMs ?? 0 } },
-        now: clock(),
-      })
-      return decision.resumedAs
     },
     heartbeat,
     tick(): void {

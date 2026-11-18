@@ -107,12 +107,6 @@ describe('저장 saveRunResult', () => {
     assert.equal(storage.loadRecords()[0].reflection?.memo, '좋았다')
     assert.equal(first.record.reflection, null) // 입력이 없으면 null
   })
-  test('60초 미만은 저장하지 않는다(too-short)', () => {
-    const { storage, runs } = finishedRun({ durationMs: 59_000, samples: [[59_000, 100]] })
-    const result = saveRunResult(runs.getState().activeSession, EMPTY_REFLECTION, storage)
-    assert.deepEqual(result, { ok: false, code: 'too-short' })
-    assert.equal(storage.loadRecords().length, 0)
-  })
   test('끝나지 않은 세션·세션 없음은 not-finished', () => {
     const storage = createRunStorage(memory().kv)
     assert.deepEqual(saveRunResult(null, EMPTY_REFLECTION, storage), { ok: false, code: 'not-finished' })
@@ -196,12 +190,6 @@ describe('결과 Store(회고·저장 흐름)', () => {
     assert.equal(results.getState().save(), true) // 이중 저장해도 1건
     assert.equal(storage.loadRecords().length, 1)
     assert.equal(storage.loadRecords()[0].recordId, deriveRecordId('sess-1'))
-  })
-  test('60초 미만 세션은 저장되지 않는다', () => {
-    const { results, storage } = setup(30_000)
-    assert.equal(results.getState().save(), false)
-    assert.equal(results.getState().saveError, 'too-short')
-    assert.equal(storage.loadRecords().length, 0)
   })
   test('다른 세션 결과가 나오면 회고가 초기화된다', () => {
     const { results } = setup()

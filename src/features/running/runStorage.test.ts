@@ -84,16 +84,6 @@ describe('기록 저장(records)', () => {
     assert.deepEqual(records.map((record) => record.recordId), ['a', 'b']) // 제자리 덮어쓰기
     assert.equal(records[0].reflection?.memo, '좋았다')
   })
-  test('60초 미만은 저장하지 않는다(too-short), 60초는 저장한다', () => {
-    const storage = createRunStorage(createMemoryStorage().storage)
-    assert.throws(
-      () => storage.saveRecord(makeRecord('short', 'gps', 59_900)),
-      (error) => error instanceof RunStorageError && error.code === 'too-short',
-    )
-    assert.equal(storage.loadRecords().length, 0)
-    storage.saveRecord(makeRecord('ok', 'gps', 60_000))
-    assert.equal(storage.loadRecords().length, 1)
-  })
   test('TIME 기록은 거리·페이스 null로 저장되고 그대로 읽힌다', () => {
     const storage = createRunStorage(createMemoryStorage().storage)
     storage.saveRecord(makeRecord('t', 'time'))

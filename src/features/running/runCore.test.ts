@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { canSaveRun, isGoalReached, MIN_SAVE_MS, targetDistanceM } from './policy.ts'
+import { isGoalReached, targetDistanceM } from './policy.ts'
 import { buildRunRecord, createRecordId, NO_GOAL } from './record.ts'
 import { createGpsRunState, feedGpsFix, getGpsRunMetrics, getTimeRunMetrics } from './runMetrics.ts'
 import { getRunElapsedMs, isRunActive, pauseRun, resumeRun, startRun, stopRun } from './runSession.ts'
@@ -15,18 +15,6 @@ function fixAt(seconds: number, speedMps = 3) {
   const at = BASE + seconds * 1000
   return { lat: 0, lng: (seconds * speedMps) / METERS_PER_DEGREE, accuracyM: 5, deviceTime: at, receivedAt: at }
 }
-
-describe('최소 저장 판정(60초)', () => {
-  test('59.9초는 불가, 60초는 가능하다', () => {
-    assert.equal(MIN_SAVE_MS, 60_000)
-    assert.equal(canSaveRun(59_900), false)
-    assert.equal(canSaveRun(60_000), true)
-    assert.equal(canSaveRun(0), false)
-  })
-  test('올바르지 않은 값은 저장할 수 없다', () => {
-    assert.equal(canSaveRun(Number.NaN), false)
-  })
-})
 
 describe('목표 달성 판정', () => {
   test('GPS 모드: 목표 거리 이상이면 도달, 미만이면 아니다', () => {

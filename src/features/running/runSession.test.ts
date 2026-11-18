@@ -4,11 +4,9 @@ import { generateVirtualRun } from '../measurement/virtualRun.ts'
 import { VIRTUAL_SCENARIOS } from '../measurement/virtualScenarios.ts'
 import type { GpsSource, GpsSourceHandlers } from '../measurement/geolocationSource.ts'
 import type { GpsErrorReason, RawFix } from '../measurement/types.ts'
-import { describeGpsStatus } from './gpsStatus.ts'
 import { createRunLive, HEARTBEAT_MS, selectLiveMetrics } from './runLive.ts'
-import { decideRestore, RESTORE_MAX_AGE_MS } from './runRestore.ts'
-import { createRunStorage, RUN_STORAGE_KEYS } from './runStorage.ts'
-import type { RunKeyValueStorage, RunSessionSnapshot } from './runStorage.ts'
+import { createRunStorage } from './runStorage.ts'
+import type { RunKeyValueStorage } from './runStorage.ts'
 import { createRunStore } from './runStore.ts'
 
 // 세션 안정화(#48): 복원·GPS 끊김/복구·화면 복귀 재연결·주기 저장. 가상 GPS 시나리오를 같은 경로로 흘려 보낸다.
@@ -47,7 +45,6 @@ function app(kv = memory().kv) {
   }
   const controller = createRunLive({
     store,
-    storage,
     now: () => now,
     createSource: (h) => {
       handlers = h
@@ -127,7 +124,7 @@ describe('GPS 끊김과 복구', () => {
     assert.equal(t.store.getState().activeSession?.mode, 'gps') // TIME으로 바뀌지 않는다
     assert.equal(t.store.getState().activeSession?.session.status, 'running')
   })
-  test('신호가 끊기면 현재 페이스가 없고, 복구되면 구간이 닫히며 복구 시각이 안내된다', () => {
+  test('신호가 끊기면 현재 페이스가 없고, 복구되면 구간이 닫힌다', () => {
     const t = app()
     t.controller.prepare({ onUnavailable: () => undefined })
     t.controller.begin('gps')
@@ -144,7 +141,6 @@ describe('GPS 끊김과 복구', () => {
     assert.equal(lost?.gpsSignal, 'lost')
     assert.equal(lost?.currentPaceSecPerKm, null)
     assert.equal(lost?.distanceM, before) // 유효 거리는 그대로
-    assert.equal(describeGpsStatus(lost?.gpsSignal ?? null, t.store.getState().activeSession?.gpsGaps ?? [], lost?.elapsedMs ?? 0), '신호를 찾고 있어요')
     const open = t.store.getState().activeSession?.gpsGaps ?? []
     assert.equal(open.length, 1)
     assert.equal(open[0].recoveredAtMs, null)
@@ -153,8 +149,6 @@ describe('GPS 끊김과 복구', () => {
     const after = t.store.getState().activeSession?.gpsGaps ?? []
     assert.equal(after.length, 1)
     assert.notEqual(after[0].recoveredAtMs, null)
-    const status = describeGpsStatus('good', after, t.metrics()?.elapsedMs ?? 0)
-    assert.match(status, /^\d\d:\d\d에 신호가 복구됐어요$/)
     // 복구 직후 재앵커: 멀리 떨어진 첫 좌표를 거리로 더하지 않는다
     assert.ok((t.metrics()?.distanceM ?? 0) - before < 5)
   })
@@ -180,7 +174,6 @@ describe('GPS 끊김과 복구', () => {
     assert.equal(t.metrics()?.gpsSignal, 'unavailable')
     assert.equal(t.store.getState().activeSession?.mode, 'gps')
     assert.equal(t.store.getState().activeSession?.gpsGaps.length, 1)
-    assert.equal(describeGpsStatus('unavailable', [], 0), '위치를 사용할 수 없어요')
   })
   test('일시정지 중에는 끊김 구간을 열지 않는다', () => {
     const t = app()
@@ -231,148 +224,5 @@ describe('화면 복귀(visibilitychange)와 주기 저장', () => {
     t.advance(HEARTBEAT_MS)
     t.controller.heartbeat()
     assert.equal(t.storage.loadSession()?.lastSeenAt, BASE + HEARTBEAT_MS)
-  })
-})
-
-describe('새로고침 복원', () => {
-  function snapshot(status: 'running' | 'paused' | 'finished', lastSeenAt: number | null): RunSessionSnapshot {
-    const t = app()
-    t.controller.begin('gps')
-    t.advance(60_000)
-    if (status === 'paused') t.controller.pause()
-    if (status === 'finished') t.controller.stop()
-    const base = t.store.getState().activeSession as RunSessionSnapshot
-    return { ...base, lastSeenAt, distanceSamples: [{ elapsedMs: 50_000, distanceM: 120 }] }
-  }
-  test('decideRestore: 없음·24시간 경과 폐기·진행 중은 lastSeenAt에 일시정지', () => {
-    assert.deepEqual(decideRestore(null, BASE), { kind: 'none' })
-    const running = snapshot('running', BASE + 50_000)
-    const decision = decideRestore(running, BASE + 3_600_000)
-    assert.equal(decision.kind, 'restore')
-    if (decision.kind === 'restore') {
-      assert.equal(decision.snapshot.session.status, 'paused')
-      assert.equal(decision.snapshot.session.pauses[0].pausedAt, BASE + 50_000)
-      assert.equal(decision.snapshot.session.id, 'sess-1')
-    }
-    assert.deepEqual(decideRestore(running, BASE + 50_000 + RESTORE_MAX_AGE_MS + 1), { kind: 'discard', reason: 'expired' })
-    assert.equal(decideRestore(running, BASE + 50_000 + RESTORE_MAX_AGE_MS).kind, 'restore')
-  })
-  test('앱이 닫혀 있던 시간은 러닝 시간에 들어가지 않고, 계속하면 같은 session id로 이어진다', () => {
-    const first = app()
-    first.controller.prepare({ onUnavailable: () => undefined })
-    first.controller.begin('gps')
-    first.advance(40_000)
-    first.controller.heartbeat() // lastSeenAt = BASE+40s
-    first.advance(20_000) // 이후 20초는 확인하지 못한 채 앱이 닫힘
-    // 3시간 뒤 새로 연다(같은 저장소)
-    const second = app(first.kv)
-    second.setNow(BASE + 3 * 3_600_000)
-    const outcome = second.controller.restore()
-    assert.equal(outcome, 'paused')
-    const restored = second.store.getState().activeSession
-    assert.equal(restored?.session.status, 'paused')
-    assert.equal(restored?.session.id, first.store.getState().activeSession?.session.id)
-    second.controller.tick()
-    assert.equal(second.metrics()?.elapsedMs, 40_000)
-    second.controller.resume()
-    assert.equal(second.store.getState().activeSession?.session.status, 'running')
-    assert.equal(second.store.getState().activeSession?.session.id, 'sess-1')
-    assert.equal(second.sourceRunning, true) // GPS 재확인(구독 시작)
-    second.advance(5_000)
-    second.controller.tick()
-    assert.equal(second.metrics()?.elapsedMs, 45_000)
-  })
-  test('복원한 GPS 세션: 쌓인 거리를 이어가고 위치를 다시 받기 전까지는 끊김으로 본다', () => {
-    const first = app()
-    first.controller.prepare({ onUnavailable: () => undefined })
-    first.controller.begin('gps')
-    for (let i = 0; i <= 30; i += 1) {
-      first.fix(37 + (i * 3) / M, 127)
-      first.advance(1000)
-    }
-    first.controller.heartbeat()
-    const distance = first.metrics()?.distanceM ?? 0
-    assert.ok(distance > 60)
-    const second = app(first.kv)
-    second.setNow(BASE + 600_000)
-    assert.equal(second.controller.restore(), 'paused')
-    assert.equal(second.metrics()?.distanceM, distance) // 구독 없이도 쌓인 거리 유지
-    second.controller.resume()
-    second.advance(2000)
-    second.controller.tick()
-    assert.equal(second.store.getState().activeSession?.gpsGaps.length, 1) // 재확인 전까지 끊김
-    second.fix(37 + 100 / M, 127)
-    assert.notEqual(second.store.getState().activeSession?.gpsGaps[0].recoveredAtMs, null)
-  })
-  test('권한이 거부된 채 복원돼도 모드는 GPS로 유지되고 끊김 상태가 된다(TIME으로 바뀌지 않는다)', () => {
-    const first = app()
-    first.controller.begin('gps')
-    first.controller.heartbeat()
-    const second = app(first.kv)
-    second.setNow(BASE + 10_000)
-    second.controller.restore()
-    second.controller.resume()
-    second.error('permission-denied')
-    second.advance(1000)
-    second.controller.tick()
-    assert.equal(second.store.getState().activeSession?.mode, 'gps')
-    assert.equal(second.metrics()?.gpsSignal, 'unavailable')
-  })
-  test('종료됐지만 저장하지 않은 결과는 결과 상태로 복원된다', () => {
-    const first = app()
-    first.controller.begin('time')
-    first.advance(90_000)
-    first.controller.stop()
-    const second = app(first.kv)
-    second.setNow(BASE + 120_000)
-    assert.equal(second.controller.restore(), 'finished')
-    assert.equal(second.store.getState().activeSession?.session.status, 'finished')
-  })
-  test('24시간이 지난 세션은 폐기하고 저장 키를 지운다', () => {
-    const first = app()
-    first.controller.begin('time')
-    first.controller.heartbeat()
-    const second = app(first.kv)
-    second.setNow(BASE + RESTORE_MAX_AGE_MS + 1000)
-    assert.equal(second.controller.restore(), 'discarded')
-    assert.equal(second.store.getState().activeSession, null)
-    assert.equal(second.kv.getItem(RUN_STORAGE_KEYS.session), null)
-  })
-  test('손상된 저장값은 건너뛰고 키를 지운다. 저장소를 쓸 수 없어도 예외가 없다', () => {
-    const mem = memory()
-    mem.kv.setItem(RUN_STORAGE_KEYS.session, '{깨진 json')
-    const t = app(mem.kv)
-    assert.equal(t.controller.restore(), 'none')
-    assert.equal(mem.kv.getItem(RUN_STORAGE_KEYS.session), null)
-    const unavailable = createRunLive({ store: createRunStore(createRunStorage(null)), storage: createRunStorage(null), now: () => BASE })
-    assert.doesNotThrow(() => unavailable.restore())
-    const throwing = createRunStorage({
-      getItem: () => {
-        throw new Error('SecurityError')
-      },
-      setItem: () => undefined,
-      removeItem: () => undefined,
-    })
-    const broken = createRunLive({ store: createRunStore(throwing), storage: throwing, now: () => BASE })
-    assert.doesNotThrow(() => broken.restore())
-  })
-  test('기초 측정 저장 키는 건드리지 않는다', () => {
-    const mem = memory()
-    mem.kv.setItem('pacebeat:measurement:v1', 'measurement-data')
-    const first = app(mem.kv)
-    first.controller.begin('time')
-    first.controller.heartbeat()
-    app(mem.kv).controller.restore()
-    assert.equal(mem.kv.getItem('pacebeat:measurement:v1'), 'measurement-data')
-  })
-})
-
-describe('GPS 상태 문구', () => {
-  test('복구 안내는 복구 직후 10초 동안만 보인다', () => {
-    const gaps = [{ lostAtMs: 200_000, recoveredAtMs: 252_000 }]
-    assert.equal(describeGpsStatus('good', gaps, 255_000), '04:12에 신호가 복구됐어요')
-    assert.equal(describeGpsStatus('good', gaps, 263_000), 'GPS 신호 정상')
-    assert.equal(describeGpsStatus(null, [], 0), '신호를 찾고 있어요')
-    assert.equal(describeGpsStatus('lost', gaps, 300_000), '신호를 찾고 있어요')
   })
 })

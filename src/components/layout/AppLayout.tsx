@@ -5,8 +5,6 @@ import { isFinishedPath, isRunNavVisible, isRunPath, RUN_PATHS, normalizeRunPath
 import { isGoalCompletion } from '../../features/running/runResult'
 import { runResultStore, useRunResultStore } from '../../features/running/runResultStore'
 import { useRunStore } from '../../features/running/runStore'
-import { useRunPhase } from '../../features/running/useRunPhase'
-import { ActiveRunBanner } from './ActiveRunBanner'
 
 export interface AppLayoutProps {
   children?: ReactNode
@@ -27,13 +25,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [saved, inFinishedFlow])
   const goalDone = useRunStore((state) => isGoalCompletion(state.activeSession))
   const sessionStatus = useRunStore((state) => state.activeSession?.session.status ?? null)
-  const phase = useRunPhase()
   const isRunHidden = isRun && !isRunNavVisible(location.pathname, sessionStatus)
-  // 러닝 진행 중에 다른 메인 탭에 있으면 상단에 복귀 바를 보인다.
-  const isMainTab = ['/home', '/records', '/growth', '/my'].some(
-    (tab) => location.pathname === tab || location.pathname.startsWith(`${tab}/`),
-  )
-  const showBanner = isMainTab && phase !== 'none'
   // 카운트다운과 진행 화면은 라임 배경을 상태바 영역까지 채운다.
   const runPath = normalizeRunPath(location.pathname)
   // 도착·완주 화면은 어두운 배경을 상태바 영역까지 채운다.
@@ -61,7 +53,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div
       className={`relative flex flex-col w-full max-w-[390px] h-[844px] max-h-[calc(100dvh-24px)] mx-auto ${isDark ? 'bg-[linear-gradient(143.9deg,#000_22.3%,#1a1a1a_103.1%)]' : isLime ? 'bg-[linear-gradient(155.4deg,#c4fa3f_32.8%,#e4ffa5_108.5%)]' : 'bg-[#FEFEFE]'} rounded-[44px] shadow-[0_14px_45px_rgba(0,0,0,0.08)] overflow-hidden ${shell} ${padding}`}
     >
-      {showBanner && <ActiveRunBanner />}
       <main className="flex-1 w-full flex flex-col overflow-y-auto">
         {children ?? <Outlet />}
       </main>
