@@ -449,3 +449,99 @@ describe('360px 레이아웃 가드(정적 확인)', () => {
     assert.ok(!countdown.includes('초 후 시작'))
   })
 })
+
+describe('#48 신호 손실·복구 통합 시나리오(가상 GPS)', () => {
+  test('시작 직후 위치를 쓸 수 없게 되면 끊김으로 남고, 페이스는 없으며 모드는 GPS로 유지되고, 좌표가 돌아오면 이어서 쌓인다', () => {
+    const h = harness()
+    startGps(h)
+    h.error('permission-denied')
+    const gaps = h.store.getState().activeSession?.gpsGaps ?? []
+    assert.equal(gaps.length, 1)
+    assert.equal(gaps[0].recoveredAtMs, null)
+    assert.equal(h.metrics()?.currentPaceSecPerKm ?? null, null)
+    assert.equal(h.store.getState().activeSession?.mode, 'gps')
+    assert.equal(h.store.getState().activeSession?.session.status, 'running')
+    h.runMeters(30)
+    assert.notEqual(h.store.getState().activeSession?.gpsGaps[0].recoveredAtMs, null)
+    assert.ok((h.metrics()?.distanceM ?? 0) > 0, '복구 뒤 유효 거리가 쌓인다')
+  })
+  test('목표 직전에 끊겼다 복구되어도 유효 거리로 한 번만 완주하고, 끊김 구간이 기록에 저장된다', () => {
+    const h = harness()
+    readyLevel(h, 'gps')
+    startGps(h)
+    h.runMeters(950)
+    const beforeLoss = h.metrics()?.distanceM ?? 0
+    assert.equal(h.store.getState().activeSession?.session.status, 'running')
+    h.clock.advance(30_000)
+    h.controller.tick()
+    assert.equal(h.metrics()?.distanceM, beforeLoss) // 끊긴 동안 거리는 늘지 않는다
+    assert.equal(h.store.getState().activeSession?.gpsGaps.length, 1)
+    h.runMeters(120)
+    const session = h.store.getState().activeSession?.session
+    assert.equal(session?.status, 'finished')
+    assert.equal(session?.endReason, 'auto')
+    assert.ok((h.metrics()?.distanceM ?? 0) >= 1000)
+    assert.equal(h.result.getState().save(), true)
+    const record = h.storage.loadRecords()[0]
+    assert.equal(record.result.completion, 'goal')
+    assert.equal(record.result.gpsGaps.length, 1)
+    assert.notEqual(record.result.gpsGaps[0].recoveredAtMs, null)
+  })
+})
+
+describe('#48 저장소·기초 측정 격리', () => {
+  const MEASUREMENT_KEY = 'pacebeat:measurement:v1'
+  test('러닝 전 과정(시작 → 일시정지 → 완주 → 저장)이 기초 측정 저장 키를 읽거나 바꾸지 않고 러닝 키만 쓴다', () => {
+    const mem = memory({ [MEASUREMENT_KEY]: 'measurement-data' })
+    const touched: string[] = []
+    const { getItem, setItem } = mem.kv
+    mem.kv.getItem = (key) => (touched.push(key), getItem(key))
+    mem.kv.setItem = (key, value) => (touched.push(key), setItem(key, value))
+    const h = harness({ kv: mem })
+    readyLevel(h, 'gps')
+    startGps(h)
+    h.runMeters(300)
+    h.controller.pause()
+    h.clock.advance(5000)
+    h.controller.resume()
+    h.runMeters(800)
+    assert.equal(h.result.getState().save(), true)
+    assert.equal(mem.map.get(MEASUREMENT_KEY), 'measurement-data')
+    assert.ok(touched.some((key) => key.startsWith('pacebeat:run:')), '러닝 키 접근이 가로채여야 한다')
+    assert.ok(!touched.includes(MEASUREMENT_KEY))
+    for (const key of mem.map.keys()) assert.ok(key === MEASUREMENT_KEY || key.startsWith('pacebeat:run:'), key)
+  })
+  test('저장소를 쓸 수 없는 환경에서도 러닝은 끝까지 진행되고, 저장만 unavailable로 실패한다', () => {
+    const storage = createRunStorage(null)
+    const store = createRunStore(storage)
+    let now = BASE
+    const source: GpsSource = { start: () => undefined, stop: () => undefined, isRunning: false }
+    const controller = createRunLive({
+      store,
+      now: () => now,
+      createSource: () => source,
+      createId: () => 'sess-1',
+      listenVisible: () => () => undefined,
+      queryPermission: () => Promise.resolve('unknown'),
+      autoHeartbeat: false,
+    })
+    const setup = createRunSetupStore()
+    const result = createRunResultStore(store, storage, setup)
+    controller.begin('time')
+    now += 90_000
+    controller.pause()
+    now += 1000
+    controller.resume()
+    now += 1000
+    controller.stop('user')
+    assert.equal(store.getState().activeSession?.session.status, 'finished')
+    assert.equal(result.getState().save(), false)
+    assert.equal(result.getState().saveError, 'unavailable')
+  })
+  test('손상된 러닝 저장값은 읽을 때 무시하고 기본값으로 시작한다', () => {
+    const mem = memory({ 'pacebeat:run:draft:v1': '{broken', 'pacebeat:run:records:v1': '###' })
+    const store = createRunStore(createRunStorage(mem.kv))
+    assert.equal(store.getState().draft.distanceKm, 3)
+    assert.deepEqual(createRunStorage(mem.kv).loadRecords(), [])
+  })
+})
