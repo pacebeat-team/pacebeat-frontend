@@ -187,7 +187,7 @@ describe('GPS 끊김과 복구', () => {
   })
 })
 
-describe('화면 복귀(visibilitychange)와 주기 저장', () => {
+describe('화면 복귀(visibilitychange)와 주기 끊김 확인', () => {
   test('진행 중 GPS 러닝은 화면이 다시 보일 때 위치 구독을 새로 연결한다', () => {
     const t = app()
     t.controller.prepare({ onUnavailable: () => undefined })
@@ -198,6 +198,18 @@ describe('화면 복귀(visibilitychange)와 주기 저장', () => {
     t.show()
     assert.equal(t.starts, startsBefore + 1)
     assert.equal(t.sourceRunning, true)
+  })
+  test('백그라운드에서 좌표가 끊겼다면 화면 복귀 때 끊김 구간으로 남고, 모드와 진행 상태는 유지된다', () => {
+    const t = app()
+    t.controller.prepare({ onUnavailable: () => undefined })
+    t.controller.begin('gps')
+    t.fix(37, 127)
+    t.advance(60_000) // 화면이 꺼져 좌표가 오지 않음
+    t.show()
+    const active = t.store.getState().activeSession
+    assert.equal(active?.gpsGaps.length, 1)
+    assert.equal(active?.mode, 'gps')
+    assert.equal(active?.session.status, 'running')
   })
   test('TIME 러닝·일시정지 중에는 위치 구독을 만들지 않고, 종료하면 리스너가 해제된다', () => {
     const time = app()
