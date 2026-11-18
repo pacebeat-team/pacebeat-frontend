@@ -9,6 +9,7 @@ import { RUN_PATHS } from '../../features/running/runFlow'
 import { runLive, selectLiveMetrics, useRunLive } from '../../features/running/runLive'
 import { getGoalProgress, getRequiredPaceSecPerKm } from '../../features/running/runProgress'
 import { useRunStore } from '../../features/running/runStore'
+import { AudioToggle } from './AudioToggle'
 import { RunFooter } from './RunFooter'
 import { useBlockBack, useRunClock } from './useRunClock'
 
@@ -107,6 +108,7 @@ export function ActivePage() {
           <img src={mascot} alt="" className="pointer-events-none absolute left-[3.5px] top-3 h-[116px] w-[88px] object-contain [@media(max-height:700px)]:top-0 [@media(max-height:700px)]:h-[60px] [@media(max-height:700px)]:w-[46px]" aria-hidden="true" />
           <img src={attention} alt="" className="pointer-events-none absolute left-[71px] top-[6px] size-[28px] [@media(max-height:700px)]:hidden" aria-hidden="true" />
           <p className="w-[190px] text-[23px] leading-[30px] [@media(max-height:700px)]:text-[18px] [@media(max-height:700px)]:leading-[22px]">{guideText}</p>
+          <AudioToggle className="absolute right-[7px] top-0" />
         </div>
         <div className="h-2" />
 
