@@ -18,7 +18,6 @@ import type {
 
 export const RUN_STORAGE_KEYS = Object.freeze({
   draft: 'pacebeat:run:draft:v1',
-  session: 'pacebeat:run:session:v1',
   records: 'pacebeat:run:records:v1',
 })
 
@@ -63,7 +62,7 @@ export interface RunDraft {
   readonly recentGoals: readonly RecentGoal[]
 }
 
-// 진행 중 세션. 이 Issue에서는 저장·읽기·삭제만 제공하고, 복원 동작은 세션 안정화 Issue의 책임이다.
+// 진행 중 세션의 메모리 상태. 저장하지 않는다(완료한 러닝만 RunRecord로 저장한다).
 export interface RunSessionSnapshot {
   readonly mode: RunMode
   readonly goal: RunGoal
@@ -71,8 +70,6 @@ export interface RunSessionSnapshot {
   readonly session: RunSessionData
   readonly distanceSamples: readonly DistanceSample[]
   readonly gpsGaps: readonly GpsGap[]
-  // 마지막으로 확인한 시각(epoch ms). 아직 기록하지 않았으면 null
-  readonly lastSeenAt: number | null
 }
 
 export function createDefaultDraft(): RunDraft {
@@ -102,22 +99,6 @@ function isValidGoal(value: unknown): value is RunGoal {
   if (targetDistanceKm === null) return targetDurationSec === null
   if (!isGoalDistance(targetDistanceKm)) return false
   return isFiniteNumber(targetDurationSec) && Number.isInteger(targetDurationSec) && targetDurationSec > 0
-}
-
-function isValidSession(value: unknown): value is RunSessionData {
-  if (!isRecord(value)) return false
-  if (typeof value.id !== 'string' || value.id === '') return false
-  if (value.status !== 'running' && value.status !== 'paused' && value.status !== 'finished') return false
-  if (!isFiniteNumber(value.startedAt) || !isNumberOrNull(value.endedAt)) return false
-  if (value.endReason !== null && value.endReason !== 'user' && value.endReason !== 'auto') return false
-  if (!Array.isArray(value.pauses)) return false
-  return value.pauses.every(
-    (pause) => isRecord(pause) && isFiniteNumber(pause.pausedAt) && isNumberOrNull(pause.resumedAt),
-  )
-}
-
-function isValidSample(value: unknown): value is DistanceSample {
-  return isRecord(value) && isFiniteNumber(value.elapsedMs) && isFiniteNumber(value.distanceM)
 }
 
 function isValidGap(value: unknown): value is GpsGap {
@@ -175,9 +156,6 @@ function getBrowserStorage(): RunKeyValueStorage | null {
 export interface RunStorage {
   loadDraft: () => RunDraft
   saveDraft: (draft: RunDraft) => void
-  loadSession: () => RunSessionSnapshot | null
-  saveSession: (snapshot: RunSessionSnapshot) => void
-  clearSession: () => void
   loadRecords: () => RunRecord[]
   getRecord: (recordId: string) => RunRecord | null
   // 같은 recordId는 덮어쓴다(중복 생성 없음).
@@ -203,15 +181,6 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
     if (storage === null) throw new RunStorageError('unavailable')
     try {
       storage.setItem(key, JSON.stringify({ version: STORAGE_VERSION, data }))
-    } catch (error) {
-      throw new RunStorageError('write-failed', error)
-    }
-  }
-
-  function remove(key: string): void {
-    if (storage === null) return
-    try {
-      storage.removeItem(key)
     } catch (error) {
       throw new RunStorageError('write-failed', error)
     }
@@ -246,27 +215,6 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
       }
     },
     saveDraft: (draft) => write(RUN_STORAGE_KEYS.draft, draft),
-
-    loadSession: () => {
-      const data = read(RUN_STORAGE_KEYS.session)
-      if (!isRecord(data)) return null
-      if (data.mode !== 'gps' && data.mode !== 'time') return null
-      if (!isValidGoal(data.goal) || !isStringOrNull(data.musicTrackId) || !isValidSession(data.session)) return null
-      if (!Array.isArray(data.distanceSamples) || !data.distanceSamples.every(isValidSample)) return null
-      if (!Array.isArray(data.gpsGaps) || !data.gpsGaps.every(isValidGap)) return null
-      if (!isNumberOrNull(data.lastSeenAt)) return null
-      return {
-        mode: data.mode,
-        goal: data.goal,
-        musicTrackId: data.musicTrackId,
-        session: data.session,
-        distanceSamples: data.distanceSamples,
-        gpsGaps: data.gpsGaps,
-        lastSeenAt: data.lastSeenAt,
-      }
-    },
-    saveSession: (snapshot) => write(RUN_STORAGE_KEYS.session, snapshot),
-    clearSession: () => remove(RUN_STORAGE_KEYS.session),
 
     loadRecords,
     getRecord: (recordId) => loadRecords().find((record) => record.recordId === recordId) ?? null,

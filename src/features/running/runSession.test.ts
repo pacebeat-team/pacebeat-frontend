@@ -4,12 +4,12 @@ import { generateVirtualRun } from '../measurement/virtualRun.ts'
 import { VIRTUAL_SCENARIOS } from '../measurement/virtualScenarios.ts'
 import type { GpsSource, GpsSourceHandlers } from '../measurement/geolocationSource.ts'
 import type { GpsErrorReason, RawFix } from '../measurement/types.ts'
-import { createRunLive, HEARTBEAT_MS, selectLiveMetrics } from './runLive.ts'
+import { createRunLive, selectLiveMetrics } from './runLive.ts'
 import { createRunStorage } from './runStorage.ts'
 import type { RunKeyValueStorage } from './runStorage.ts'
 import { createRunStore } from './runStore.ts'
 
-// 세션 안정화(#48): 복원·GPS 끊김/복구·화면 복귀 재연결·주기 저장. 가상 GPS 시나리오를 같은 경로로 흘려 보낸다.
+// 세션 안정화(#48): GPS 끊김/복구·화면 복귀 재연결·주기 끊김 확인. 가상 GPS 시나리오를 같은 경로로 흘려 보낸다.
 
 const BASE = 1_700_000_000_000
 
@@ -213,16 +213,5 @@ describe('화면 복귀(visibilitychange)와 주기 저장', () => {
     stopped.controller.begin('time')
     stopped.controller.stop()
     assert.equal(stopped.hasVisibleListener, false)
-  })
-  test('heartbeat는 마지막 확인 시각을 저장한다(진행 중에만)', () => {
-    const t = app()
-    t.controller.begin('time')
-    t.advance(HEARTBEAT_MS)
-    t.controller.heartbeat()
-    assert.equal(t.storage.loadSession()?.lastSeenAt, BASE + HEARTBEAT_MS)
-    t.controller.pause()
-    t.advance(HEARTBEAT_MS)
-    t.controller.heartbeat()
-    assert.equal(t.storage.loadSession()?.lastSeenAt, BASE + HEARTBEAT_MS)
   })
 })

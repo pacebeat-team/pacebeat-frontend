@@ -11,13 +11,11 @@ import { computeAvgPaceSecPerKm } from './runPace.ts'
 import { createRunResultStore } from './runResultStore.ts'
 import { summarizeRun } from './runResult.ts'
 import { createRunSetupStore } from './runSetupStore.ts'
-import { createRunStorage, RUN_STORAGE_KEYS } from './runStorage.ts'
+import { createRunStorage } from './runStorage.ts'
 import type { RunKeyValueStorage } from './runStorage.ts'
-import { appendDistanceSample, computeSplits } from './splits.ts'
-import type { DistanceSample } from './types.ts'
-import { createRunStore, MAX_DISTANCE_SAMPLES, SESSION_SAVE_MIN_MS } from './runStore.ts'
+import { createRunStore } from './runStore.ts'
 
-// R3·R4·R5 리뷰 결함 수정의 회귀 테스트(자동 종료 화면 전환, 권한 지연, 저장 정책, 저장 후 재시작, 복원 경계).
+// R3·R4·R5 리뷰 결함 수정의 회귀 테스트(자동 종료 화면 전환, 권한 지연, 저장 후 재시작).
 // 가상 GPS 입력이다. 실기기 동작은 검증하지 않는다.
 
 const BASE = 1_700_000_000_000
@@ -51,12 +49,10 @@ interface Harness {
   readonly controller: ReturnType<typeof createRunLive>
   readonly setup: ReturnType<typeof createRunSetupStore>
   readonly result: ReturnType<typeof createRunResultStore>
-  readonly timers: { fire: () => void; count: () => number }
   readonly permissionChange: { fire: (state: GpsPermission) => void }
   readonly clock: { now: () => number; set: (value: number) => void; advance: (ms: number) => void }
   fix: (lat: number, lng: number) => void
   error: (reason: GpsErrorReason) => void
-  hide: () => void
   stops: () => number
   sourceStarts: () => number
   sourceRunning: () => boolean
@@ -73,22 +69,10 @@ function harness(options: HarnessOptions = {}): Harness {
   const mem = options.kv ?? memory()
   const storage = createRunStorage(mem.kv)
   let now = BASE
-  const pending: (() => void)[] = []
-  const store = createRunStore(storage, {
-    now: () => now,
-    schedule: (callback) => {
-      pending.push(callback)
-      return callback
-    },
-    cancel: (handle) => {
-      const index = pending.indexOf(handle as () => void)
-      if (index >= 0) pending.splice(index, 1)
-    },
-  })
+  const store = createRunStore(storage)
   let handlers: GpsSourceHandlers | null = null
   let running = false
   let starts = 0
-  let hideCallback: (() => void) | null = null
   const source: GpsSource = {
     start: () => {
       running = true
@@ -111,12 +95,6 @@ function harness(options: HarnessOptions = {}): Harness {
     },
     createId: () => 'sess-1',
     listenVisible: () => () => undefined,
-    listenHide: (callback) => {
-      hideCallback = callback
-      return () => {
-        hideCallback = null
-      }
-    },
     queryPermission: (onChange) => {
       permissionOnChange = onChange
       return options.permission?.() ?? Promise.resolve('unknown')
@@ -133,13 +111,6 @@ function harness(options: HarnessOptions = {}): Harness {
     controller,
     setup,
     result,
-    timers: {
-      fire: () => {
-        const callbacks = pending.splice(0)
-        for (const callback of callbacks) callback()
-      },
-      count: () => pending.length,
-    },
     permissionChange: { fire: (state) => permissionOnChange(state) },
     clock: { now: () => now, set: (value) => void (now = value), advance: (ms) => void (now += ms) },
     fix: (lat, lng) => {
@@ -147,7 +118,6 @@ function harness(options: HarnessOptions = {}): Harness {
       handlers?.onFix(raw)
     },
     error: (reason) => handlers?.onError(reason),
-    hide: () => hideCallback?.(),
     stops: () => 0,
     sourceStarts: () => starts,
     sourceRunning: () => running,
@@ -319,89 +289,6 @@ describe('위치 권한: 늦은 응답', () => {
   })
 })
 
-describe('세션 저장 정책', () => {
-  test('상태 전환(시작·일시정지·재개·종료)은 바로 저장된다', () => {
-    const h = harness()
-    const saved = () => h.storage.loadSession()?.session.status
-    h.controller.begin('gps')
-    assert.equal(saved(), 'running')
-    h.clock.advance(1000)
-    h.controller.pause()
-    assert.equal(saved(), 'paused')
-    h.clock.advance(1000)
-    h.controller.resume()
-    assert.equal(saved(), 'running')
-    h.controller.stop('user')
-    assert.equal(saved(), 'finished')
-  })
-  test('GPS fix마다 전체를 쓰지 않고 SESSION_SAVE_MIN_MS 안에서는 모았다가 쓴다', () => {
-    const h = harness()
-    let writes = 0
-    const original = h.mem.kv.setItem
-    h.mem.kv.setItem = (key, value) => {
-      if (key === RUN_STORAGE_KEYS.session) writes += 1
-      original(key, value)
-    }
-    startGps(h)
-    const afterStart = writes
-    for (let i = 0; i < 20; i += 1) {
-      h.clock.advance(50) // 1초 안에 20번
-      h.fix(37 + (i * 3) / M, 127)
-    }
-    assert.ok(writes - afterStart <= 2, `20개 fix에 ${writes - afterStart}번 저장`)
-    assert.ok(h.timers.count() >= 1, '모아 둔 변경은 타이머로 예약된다')
-    h.clock.advance(SESSION_SAVE_MIN_MS)
-    h.timers.fire()
-    const snapshot = h.storage.loadSession()
-    assert.equal(snapshot?.distanceSamples.length, h.store.getState().activeSession?.distanceSamples.length) // 모아 둔 샘플이 모두 저장됨
-  })
-  test('pagehide·화면 숨김에서는 모아 둔 변경을 바로 저장한다(최신 상태와의 차이 없음)', () => {
-    const h = harness()
-    startGps(h)
-    h.runMeters(30)
-    const memoryCount = h.store.getState().activeSession?.distanceSamples.length ?? 0
-    assert.ok(memoryCount > 3)
-    h.hide()
-    assert.equal(h.storage.loadSession()?.distanceSamples.length, memoryCount)
-    assert.notEqual(h.storage.loadSession()?.lastSeenAt, null)
-  })
-  test('주기 저장(heartbeat)도 모아 둔 샘플까지 함께 쓴다', () => {
-    const h = harness()
-    startGps(h)
-    h.runMeters(20)
-    h.controller.heartbeat()
-    assert.equal(h.storage.loadSession()?.distanceSamples.length, h.store.getState().activeSession?.distanceSamples.length)
-  })
-  test('저장 실패는 조용히 넘어가지 않고 persistError로 알리며, 쓸 수 있게 되면 해제된다', () => {
-    const h = harness()
-    h.controller.begin('time')
-    assert.equal(h.store.getState().persistError, false)
-    h.mem.failWrites(true)
-    h.controller.pause()
-    assert.equal(h.store.getState().persistError, true)
-    assert.equal(h.store.getState().activeSession?.session.status, 'paused') // 메모리 상태는 유지
-    h.mem.failWrites(false)
-    h.clock.advance(1000)
-    h.controller.resume()
-    assert.equal(h.store.getState().persistError, false)
-    assert.equal(h.storage.loadSession()?.session.status, 'running')
-  })
-  test('거리 샘플은 상한을 넘으면 성기게 하되 처음과 마지막 샘플은 유지한다', () => {
-    const h = harness()
-    h.controller.begin('gps')
-    const api = h.store.getState()
-    for (let i = 1; i <= MAX_DISTANCE_SAMPLES + 50; i += 1) api.recordDistanceSample(i * 1000, i * 3)
-    const samples = h.store.getState().activeSession!.distanceSamples
-    assert.ok(samples.length <= MAX_DISTANCE_SAMPLES)
-    assert.equal(samples[0].distanceM, 3)
-    assert.equal(samples[samples.length - 1].distanceM, (MAX_DISTANCE_SAMPLES + 50) * 3)
-    for (let i = 1; i < samples.length; i += 1) {
-      assert.ok(samples[i].distanceM >= samples[i - 1].distanceM)
-      assert.ok(samples[i].elapsedMs >= samples[i - 1].elapsedMs)
-    }
-  })
-})
-
 describe('저장 후 상태·라우팅', () => {
   function finishAndSave(h: Harness, mode: 'gps' | 'time'): void {
     readyLevel(h, mode)
@@ -510,12 +397,11 @@ describe('GPS 일시정지·재개와 gap', () => {
     h.fix(37 + 0.02, 127)
     assert.notEqual(h.store.getState().activeSession?.gpsGaps[0].recoveredAtMs, null)
   })
-  test('일시정지·재개는 같은 세션을 유지하고 일시정지 시각이 마지막 확인 시각으로 남는다', () => {
+  test('일시정지·재개는 같은 세션을 유지한다', () => {
     const h = harness()
     startGps(h)
     h.clock.advance(10_000)
     h.controller.pause()
-    assert.equal(h.store.getState().activeSession?.lastSeenAt, h.clock.now())
     assert.equal(h.store.getState().activeSession?.session.id, 'sess-1')
   })
 })
@@ -561,80 +447,5 @@ describe('360px 레이아웃 가드(정적 확인)', () => {
     const countdown = read('../../pages/running/CountdownPage.tsx')
     assert.ok(!countdown.includes('assertive'))
     assert.ok(!countdown.includes('초 후 시작'))
-  })
-})
-
-describe('긴 러닝: 샘플 축소와 측정 정확도', () => {
-  // 5시간 분량(1초 간격, 페이스가 변하는 가상 러닝)을 상한 로직에 흘려 보내 전체 샘플로 구한 값과 비교한다.
-  function longRun(hours: number) {
-    const h = harness()
-    h.controller.begin('gps')
-    let full: DistanceSample[] = []
-    let distance = 0
-    const seconds = Math.floor(hours * 3600)
-    for (let i = 1; i <= seconds; i += 1) {
-      const speed = 3.1 + 0.6 * Math.sin(i / 300) + (i % 900 < 30 ? 1.2 : 0)
-      distance += speed
-      h.store.getState().recordDistanceSample(i * 1000, distance)
-      full = appendDistanceSample(full, { elapsedMs: i * 1000, distanceM: distance })
-    }
-    return { h, full, kept: h.store.getState().activeSession!.distanceSamples, distance }
-  }
-  test('축소 뒤에도 처음·마지막 샘플과 시간 순서가 유지되고 마지막 거리(누적 거리)가 같다', () => {
-    const { full, kept, distance } = longRun(5)
-    assert.ok(full.length > MAX_DISTANCE_SAMPLES)
-    assert.ok(kept.length <= MAX_DISTANCE_SAMPLES)
-    assert.deepEqual(kept[0], full[0])
-    assert.deepEqual(kept[kept.length - 1], full[full.length - 1])
-    assert.equal(kept[kept.length - 1].distanceM, distance)
-    for (let i = 1; i < kept.length; i += 1) {
-      assert.ok(kept[i].elapsedMs > kept[i - 1].elapsedMs)
-      assert.ok(kept[i].distanceM >= kept[i - 1].distanceM)
-    }
-  })
-  test('구간별 기록과 평균 페이스는 축소 전 전체 샘플로 구한 값과 같다', () => {
-    const { full, kept } = longRun(5)
-    assert.deepEqual(computeSplits(kept), computeSplits(full))
-    const last = full[full.length - 1]
-    const lastKept = kept[kept.length - 1]
-    assert.equal(computeAvgPaceSecPerKm(lastKept.elapsedMs, lastKept.distanceM), computeAvgPaceSecPerKm(last.elapsedMs, last.distanceM))
-  })
-  test('저장 크기: 5시간 러닝도 세션 JSON이 약 150KB 이하이다', () => {
-    const { kept } = longRun(5)
-    assert.ok(JSON.stringify(kept).length < 150 * 1024)
-  })
-  test('저장 실패 중에 쌓인 샘플도 쓸 수 있게 된 뒤 다음 주기 저장에서 모두 저장된다', () => {
-    const h = harness()
-    h.controller.begin('gps')
-    h.mem.failWrites(true)
-    for (let i = 1; i <= 30; i += 1) {
-      h.clock.advance(1000)
-      h.store.getState().recordDistanceSample(i * 1000, i * 3)
-    }
-    h.timers.fire()
-    assert.equal(h.store.getState().persistError, true)
-    h.mem.failWrites(false)
-    h.clock.advance(5000)
-    h.controller.heartbeat()
-    assert.equal(h.store.getState().persistError, false)
-    assert.equal(h.storage.loadSession()?.distanceSamples.length, 30)
-  })
-  test('일시정지·종료 직전에 모아 둔 샘플이 저장에서 빠지지 않는다', () => {
-    const h = harness()
-    h.controller.begin('gps')
-    for (let i = 1; i <= 10; i += 1) {
-      h.clock.advance(100)
-      h.store.getState().recordDistanceSample(i * 100, i * 3)
-    }
-    h.controller.pause()
-    assert.equal(h.storage.loadSession()?.distanceSamples.length, 10)
-    h.clock.advance(100)
-    h.controller.resume()
-    for (let i = 11; i <= 15; i += 1) {
-      h.clock.advance(100)
-      h.store.getState().recordDistanceSample(i * 100, i * 3)
-    }
-    h.controller.stop('user')
-    assert.equal(h.storage.loadSession()?.distanceSamples.length, 15)
   })
 })

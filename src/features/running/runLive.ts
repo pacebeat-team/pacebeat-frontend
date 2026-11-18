@@ -16,7 +16,7 @@ import type { RunStoreState } from './runStore.ts'
 import type { RunMode } from './types.ts'
 
 // 러닝 실행 중 상태(저장하지 않는 값)와 위치 수집 연결.
-// - 세션·목표·거리 샘플·GPS 끊김 구간은 runStore가 가진다(저장 대상). 여기서는 좌표 검증 상태(tracker)·누적 거리(metrics)·현재 시각만 가진다.
+// - 세션·목표·거리 샘플·GPS 끊김 구간은 runStore가 가진다(진행 중에는 메모리에만 있다). 여기서는 좌표 검증 상태(tracker)·누적 거리(metrics)·현재 시각만 가진다.
 // - 위치 수집은 화면(React)이 아니라 이 컨트롤러가 소유한다. 다른 탭으로 이동해도 세션과 수집이 이어진다.
 // - 목표 거리 도달은 좌표를 받는 사건에서만 판정한다(타이머 없음). 도달하면 세션을 한 번만 'goal'로 종료한다.
 // - TIME 모드는 위치 수집을 시작하지 않는다.
@@ -25,7 +25,7 @@ import type { RunMode } from './types.ts'
 // - 웹 앱의 한계: 화면이 꺼지거나 앱이 백그라운드에 있는 동안의 위치 수집은 보장되지 않는다. 시간은 시계로 계속 흐르고
 //   거리는 받은 좌표로만 늘어난다. 화면이 다시 보이면 위치 구독을 새로 연결한다.
 
-// 마지막 확인 시각을 저장하는 주기(ms)
+// 화면이 다른 탭에 있어도 GPS 끊김을 확인하는 주기(ms)
 export const HEARTBEAT_MS = 5000
 
 export interface RunLiveData {
@@ -38,17 +38,15 @@ export interface RunLiveData {
 export type GpsPermission = 'granted' | 'denied' | 'prompt' | 'unknown'
 
 export interface RunLiveDeps {
-  readonly store?: StoreApi<RunStoreState> & { flushSession?: () => void }
+  readonly store?: StoreApi<RunStoreState>
   // 위치 권한 상태를 읽는다. 상태가 바뀌면 onChange를 부른다. 기본은 navigator.permissions.
   readonly queryPermission?: (onChange: (state: GpsPermission) => void) => Promise<GpsPermission>
-  // 화면이 숨겨지거나 페이지를 떠날 때 호출되는 콜백을 등록한다. 해제 함수를 돌려준다. 기본은 visibilitychange(hidden)·pagehide.
-  readonly listenHide?: (callback: () => void) => () => void
   readonly now?: () => number
   readonly createSource?: (handlers: GpsSourceHandlers) => GpsSource
   readonly createId?: () => string
   // 화면이 다시 보일 때 호출되는 콜백을 등록한다. 해제 함수를 돌려준다. 기본은 document의 visibilitychange.
   readonly listenVisible?: (callback: () => void) => () => void
-  // 주기 저장 타이머. 기본은 setInterval(진행 중에만 켠다). false면 쓰지 않는다(테스트는 heartbeat를 직접 부른다).
+  // 끊김 확인 타이머. 기본은 setInterval(진행 중에만 켠다). false면 쓰지 않는다(테스트는 heartbeat를 직접 부른다).
   readonly autoHeartbeat?: boolean
 }
 
@@ -64,19 +62,6 @@ function defaultListenVisible(callback: () => void): () => void {
   }
   document.addEventListener('visibilitychange', handler)
   return () => document.removeEventListener('visibilitychange', handler)
-}
-
-function defaultListenHide(callback: () => void): () => void {
-  if (typeof document === 'undefined' || typeof window === 'undefined') return () => undefined
-  const onVisibility = () => {
-    if (document.visibilityState === 'hidden') callback()
-  }
-  document.addEventListener('visibilitychange', onVisibility)
-  window.addEventListener('pagehide', callback)
-  return () => {
-    document.removeEventListener('visibilitychange', onVisibility)
-    window.removeEventListener('pagehide', callback)
-  }
 }
 
 async function defaultQueryPermission(onChange: (state: GpsPermission) => void): Promise<GpsPermission> {
@@ -98,23 +83,17 @@ export function createRunLive(deps: RunLiveDeps = {}) {
   const listenVisible = deps.listenVisible ?? defaultListenVisible
   const autoHeartbeat = deps.autoHeartbeat ?? true
   const queryPermission = deps.queryPermission ?? defaultQueryPermission
-  const listenHide = deps.listenHide ?? defaultListenHide
 
   const live = createStore<RunLiveData>()(() => ({ gps: createGpsRunState(), now: clock() }))
   let source: GpsSource | null = null
   let onUnavailable: ((reason: GpsErrorReason) => void) | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let unlistenVisible: (() => void) | null = null
-  let unlistenHide: (() => void) | null = null
   // 시작 준비(카운트다운) 한 번을 가리키는 번호. 늦게 도착한 권한 응답이 다음 준비·시작에 영향을 주지 않게 한다.
   let prepareId = 0
   let permission: GpsPermission = 'unknown'
   // 이번 준비·세션에서 위치(좌표) 신호를 한 번이라도 받았다 = 권한이 허용됐다.
   let gotSignal = false
-
-  function flush(): void {
-    runs.flushSession?.()
-  }
 
   // 위치를 쓸 수 없어 시작하지 못한다고 알린다(세션 시작 전에만).
   function failPrepare(reason: GpsErrorReason): void {
@@ -150,7 +129,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     if (active === null || active.mode !== 'gps' || active.session.status !== 'running') return
     const { tracker } = live.getState().gps
     const status = getGpsStatus(tracker, now)
-    // 처음 좌표를 기다리는 동안(status null, 거리 없음)은 끊긴 것이 아니다. 거리를 쌓은 뒤(복원 포함)의 검색 중은 끊김이다.
+    // 처음 좌표를 기다리는 동안(status null, 거리 없음)은 끊긴 것이 아니다. 거리를 쌓은 뒤의 검색 중은 끊김이다.
     const lost = status === 'lost' || status === 'unavailable' || (status === null && active.distanceSamples.length > 0)
     if (!lost) return
     const last = active.gpsGaps[active.gpsGaps.length - 1]
@@ -200,11 +179,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
   }
 
   function heartbeat(): void {
-    const now = clock()
-    runs.getState().touchSession(now)
-    syncGaps(now)
-    // 마지막 확인 시각은 복원의 기준이므로 주기마다 모아 둔 변경과 함께 바로 저장한다.
-    flush()
+    syncGaps(clock())
   }
 
   function startMonitoring(): void {
@@ -213,7 +188,6 @@ export function createRunLive(deps: RunLiveDeps = {}) {
       ;(heartbeatTimer as { unref?: () => void }).unref?.()
     }
     if (unlistenVisible === null) unlistenVisible = listenVisible(handleVisible)
-    if (unlistenHide === null) unlistenHide = listenHide(handleHide)
   }
 
   function stopMonitoring(): void {
@@ -221,14 +195,6 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     heartbeatTimer = null
     unlistenVisible?.()
     unlistenVisible = null
-    unlistenHide?.()
-    unlistenHide = null
-  }
-
-  // 화면이 숨겨지거나 페이지를 떠나면 마지막 확인 시각을 남기고 모아 둔 세션 변경을 바로 저장한다.
-  function handleHide(): void {
-    runs.getState().touchSession(clock())
-    flush()
   }
 
   // 화면이 다시 보이면: 시각을 갱신하고, 진행 중인 GPS 러닝은 위치 구독을 새로 연결한다(백그라운드에서 끊겼을 수 있다).
@@ -247,7 +213,6 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     runs.getState().stopRun(now, reason)
     stopSource()
     stopMonitoring()
-    flush()
   }
 
   return {
@@ -302,9 +267,8 @@ export function createRunLive(deps: RunLiveDeps = {}) {
       runs.getState().pauseRun(now)
       live.setState({ now })
       stopMonitoring()
-      flush()
     },
-    // 같은 세션을 이어간다. 복원된 GPS 세션은 위치 구독이 없으므로 이때 다시 시작해 위치를 재확인한다.
+    // 같은 세션을 이어간다. 일시정지 중 위치 구독이 멈춰 있으면 이때 다시 시작해 위치를 재확인한다.
     resume(): void {
       const now = clock()
       const active = runs.getState().activeSession

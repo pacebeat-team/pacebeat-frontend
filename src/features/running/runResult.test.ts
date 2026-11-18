@@ -164,8 +164,8 @@ describe('결과 Store(회고·저장 흐름)', () => {
     results.getState().setDraftMemo('가'.repeat(150))
     assert.equal(results.getState().draft.memo.length, 100)
   })
-  test('저장 성공: 기록이 1건 저장되고 진행 중 세션 키가 지워진다', () => {
-    const { results, runs, storage, mem } = setup()
+  test('저장 성공: 기록이 1건 저장되고 이동 뒤 진행 중 세션이 지워진다', () => {
+    const { results, runs, storage } = setup()
     results.getState().setDifficulty('easy')
     assert.equal(results.getState().save(), true)
     assert.equal(storage.loadRecords().length, 1)
@@ -173,7 +173,6 @@ describe('결과 Store(회고·저장 흐름)', () => {
     assert.equal(runs.getState().activeSession?.session.status, 'finished') // 이동 전에는 세션이 남아 있다
     results.getState().finalize()
     assert.equal(runs.getState().activeSession, null)
-    assert.equal(mem.map.has(RUN_STORAGE_KEYS.session), false)
   })
   test('저장 실패: 세션·회고 입력을 그대로 두고 오류를 보이며, 재시도는 같은 recordId로 성공한다', () => {
     const { results, runs, storage, mem } = setup(600_000, true)
@@ -183,7 +182,6 @@ describe('결과 Store(회고·저장 흐름)', () => {
     assert.equal(results.getState().saving, false)
     assert.equal(results.getState().applied.difficulty, 'hard')
     assert.equal(runs.getState().activeSession?.session.status, 'finished')
-    assert.ok(mem.map.has(RUN_STORAGE_KEYS.session))
     mem.state.fail = false
     assert.equal(results.getState().save(), true)
     assert.equal(results.getState().saved, true)

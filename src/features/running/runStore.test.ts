@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRunStorage, RUN_STORAGE_KEYS } from './runStorage.ts'
+import { createRunStorage } from './runStorage.ts'
 import type { RunKeyValueStorage } from './runStorage.ts'
 import { createRunStore } from './runStore.ts'
 
@@ -151,17 +151,7 @@ describe('세션 진행', () => {
     store.getState().recordDistanceSample(1000, 5)
     assert.equal(store.getState().activeSession?.distanceSamples.length, 0)
   })
-  test('세션은 전용 키에 저장되고 지우면 삭제된다', () => {
-    const { store, storage, map } = setup()
-    store.getState().startRun('gps', BASE, () => 'sess-1')
-    assert.equal(storage.loadSession()?.session.id, 'sess-1')
-    store.getState().pauseRun(BASE + 5000)
-    assert.equal(storage.loadSession()?.session.status, 'paused')
-    store.getState().clearSession()
-    assert.equal(map.has(RUN_STORAGE_KEYS.session), false)
-    assert.equal(store.getState().activeSession, null)
-  })
-  test('새 Store는 저장된 세션을 상태로 불러오지 않는다(복원은 후속 Issue)', () => {
+  test('새 Store는 저장된 세션을 상태로 불러오지 않는다', () => {
     const { store, kv } = setup()
     store.getState().startRun('gps', BASE, () => 'sess-1')
     assert.equal(createRunStore(createRunStorage(kv)).getState().activeSession, null)
