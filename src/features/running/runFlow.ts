@@ -10,6 +10,16 @@ export const RUN_PATHS = Object.freeze({
   countdown: '/running/countdown',
 })
 
+// 음악 미리 듣기 화면: /running/music/<trackId>
+export function getMusicPreviewPath(trackId: string): string {
+  return `${RUN_PATHS.music}/${trackId}`
+}
+
+function isMusicPreviewPath(path: string): boolean {
+  const prefix = `${RUN_PATHS.music}/`
+  return path.startsWith(prefix) && path.length > prefix.length && !path.slice(prefix.length).includes('/')
+}
+
 // 준비 흐름의 진행 단계(이 앱을 연 뒤 메모리에만 있다. 새로고침하면 처음부터 다시 시작한다).
 // 0 아직 목표 화면을 보지 않음 → 1 목표 화면 진입 → 2 목표 확정(다음) → 3 음악 확정(다음/음악 없이) → 4 시작 신호
 export type RunSetupLevel = 0 | 1 | 2 | 3 | 4
@@ -35,12 +45,13 @@ export function isRunPath(pathname: string): boolean {
 // 알 수 없는 /running/* 경로도 목표 화면으로 보낸다.
 export function resolveRunRedirect(pathname: string, level: RunSetupLevel): string | null {
   const path = normalizeRunPath(pathname)
-  const required = REQUIRED_LEVEL[path]
+  // 음악 미리 듣기는 음악 화면과 같은 단계(목표 확정)가 필요하다.
+  const required = isMusicPreviewPath(path) ? REQUIRED_LEVEL[RUN_PATHS.music] : REQUIRED_LEVEL[path]
   if (required === undefined) return RUN_PATHS.goal
   return level >= required ? null : RUN_PATHS.goal
 }
 
-// 하단 네비는 러닝 흐름에서 목표·음악 화면에서만 보인다(시간 선택·준비 확인·카운트다운에서는 숨김).
+// 하단 네비는 러닝 흐름에서 목표·음악 화면에서만 보인다(시간 선택·음악 미리 듣기·준비 확인·카운트다운에서는 숨김).
 export function isRunNavVisible(pathname: string): boolean {
   const path = normalizeRunPath(pathname)
   return path === RUN_PATHS.goal || path === RUN_PATHS.music

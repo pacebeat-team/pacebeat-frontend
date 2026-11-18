@@ -5,6 +5,7 @@ import { RunFlowGuard } from '../pages/running/RunFlowGuard'
 import { GoalPage } from '../pages/running/GoalPage'
 import { TimePickerPage } from '../pages/running/TimePickerPage'
 import { MusicPage } from '../pages/running/MusicPage'
+import { MusicPreviewPage } from '../pages/running/MusicPreviewPage'
 import { ReadyPage } from '../pages/running/ReadyPage'
 import { CountdownPage } from '../pages/running/CountdownPage'
 import { RecordsPage } from '../pages/RecordsPage'
@@ -56,6 +57,7 @@ export const router = createBrowserRouter([
           { index: true, element: <GoalPage /> },
           { path: 'time', element: <TimePickerPage /> },
           { path: 'music', element: <MusicPage /> },
+          { path: 'music/:trackId', element: <MusicPreviewPage /> },
           { path: 'ready', element: <ReadyPage /> },
           { path: 'countdown', element: <CountdownPage /> },
           { path: '*', element: <Navigate to="/running" replace /> },

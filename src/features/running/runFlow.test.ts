@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isRunNavVisible, isRunPath, normalizeRunPath, resolveRunRedirect, RUN_PATHS } from './runFlow.ts'
+import { getMusicPreviewPath, isRunNavVisible, isRunPath, normalizeRunPath, resolveRunRedirect, RUN_PATHS } from './runFlow.ts'
 import { createRunSetupStore } from './runSetupStore.ts'
 import { createRunStore } from './runStore.ts'
 import { createRunStorage } from './runStorage.ts'
@@ -31,6 +31,13 @@ describe('경로 접근 규칙', () => {
     assert.equal(normalizeRunPath('/running/'), '/running')
     assert.equal(normalizeRunPath('/'), '/')
   })
+  test('음악 미리 듣기 경로는 음악 화면과 같은 단계가 필요하다', () => {
+    const preview = getMusicPreviewPath('city-loop')
+    assert.equal(preview, '/running/music/city-loop')
+    assert.equal(resolveRunRedirect(preview, 1), RUN_PATHS.goal)
+    assert.equal(resolveRunRedirect(preview, 2), null)
+    assert.equal(resolveRunRedirect('/running/music/a/b', 4), RUN_PATHS.goal)
+  })
   test('isRunPath', () => {
     assert.equal(isRunPath('/running'), true)
     assert.equal(isRunPath('/running/ready'), true)
@@ -46,6 +53,7 @@ describe('하단 네비 규칙', () => {
     assert.equal(isRunNavVisible('/running/music/'), true)
   })
   test('시간 선택·준비 확인·카운트다운에서는 숨긴다', () => {
+    assert.equal(isRunNavVisible(getMusicPreviewPath('city-loop')), false)
     assert.equal(isRunNavVisible(RUN_PATHS.time), false)
     assert.equal(isRunNavVisible(RUN_PATHS.ready), false)
     assert.equal(isRunNavVisible(RUN_PATHS.countdown), false)
@@ -161,5 +169,23 @@ describe('표시 형식', () => {
     assert.equal(formatPace(420), '7:00')
     assert.equal(formatDurationKorean(1260), '21분')
     assert.equal(formatDurationKorean(450), '7분 30초')
+  })
+})
+
+describe('Figma 대조 화면 구조(소스 확인)', () => {
+  const read = (name: string) => readFileSync(new URL(`../../pages/running/${name}`, import.meta.url), 'utf8')
+
+  test('음악 미리 듣기: Figma 안내 문구 원문이고 하단 버튼은 이 곡으로 준비하기(주)·다른 곡 고르기(보조) 순서이다', () => {
+    const source = read('MusicPreviewPage.tsx')
+    assert.match(source, /인터랙션 시안에서는 음악이 재생되지 않아요\./)
+    assert.match(source, /다른 곡을 고르면 이전 미리 듣기는 멈춰요\./)
+    assert.ok(source.indexOf('label="이 곡으로 준비하기"') < source.indexOf('label="다른 곡 고르기"'))
+    assert.ok(!/new Audio|<audio/.test(source), '실제 오디오를 재생하지 않는다')
+  })
+  test('공통 하단 영역: 좌우 12px, 위 8px, 보조 버튼이 있으면 아래 20px·없으면 36px(Safe Area만큼 뺀다)', () => {
+    const source = read('RunFooter.tsx')
+    assert.match(source, /px-3 pt-2/)
+    assert.match(source, /calc\(20px-env\(safe-area-inset-bottom/)
+    assert.match(source, /calc\(36px-env\(safe-area-inset-bottom/)
   })
 })
