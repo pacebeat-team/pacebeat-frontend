@@ -5,6 +5,7 @@ import { isFinishedPath, isRunNavVisible, isRunPath, RUN_PATHS, normalizeRunPath
 import { isGoalCompletion } from '../../features/running/runResult'
 import { runResultStore, useRunResultStore } from '../../features/running/runResultStore'
 import { useRunStore } from '../../features/running/runStore'
+import { isMyNavHidden } from '../../features/my/routes'
 
 export interface AppLayoutProps {
   children?: ReactNode
@@ -37,7 +38,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const myPath = location.pathname.replace(/\/+$/, '')
   const isMy = myPath === '/my' || myPath.startsWith('/my/')
   const isMyHome = myPath === '/my'
-  const hideNavigation = isSplash || isOnboarding || isMeasurement || isProfile || isRunHidden || myPath === '/my/profile'
+  const hideNavigation = isSplash || isOnboarding || isMeasurement || isProfile || isRunHidden || isMyNavHidden(myPath)
 
   // 러닝 화면은 Figma 프레임(390x844, 상태바 44px 포함)과 같은 기하로 그린다.
   // - 테두리를 두지 않아 안쪽 폭이 390px이고, 좁은 화면(430px 이하)에서는 화면 전체를 채운다.

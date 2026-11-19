@@ -17,6 +17,9 @@ import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { ProfileEditPage } from '../pages/my/ProfileEditPage'
+import { DeviceInsolesPage } from '../pages/my/DeviceInsolesPage'
+import { DeviceHelpPage } from '../pages/my/DeviceHelpPage'
+import { DeviceCalibrationPage } from '../pages/my/DeviceCalibrationPage'
 import { SplashPage } from '../pages/SplashPage'
 import { IntroPage } from '../pages/onboarding/IntroPage'
 import { ExperiencePage } from '../pages/onboarding/ExperiencePage'
@@ -120,6 +123,9 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <MyPage /> },
           { path: 'profile', element: <ProfileEditPage /> },
+          { path: 'device', element: <DeviceInsolesPage /> },
+          { path: 'device/help', element: <DeviceHelpPage /> },
+          { path: 'device/calibration', element: <DeviceCalibrationPage /> },
         ],
       },
       {
