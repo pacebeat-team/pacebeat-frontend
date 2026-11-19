@@ -15,4 +15,8 @@ export interface OnboardingData {
   motionFitnessSupport: MotionFitnessSupport
   // 위치 권한 거부 시 시간 전용 러닝을 고려한 상태
   timeOnlyMode: boolean | null
+  // 온보딩(Intro → Experience → Permissions)을 마쳤는가
+  onboardingCompleted: boolean
+  // 기초 측정을 완료했는가 (측정 세션과의 연결은 이후 단계에서 구현)
+  baselineMeasurementCompleted: boolean
 }

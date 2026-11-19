@@ -13,6 +13,8 @@ interface OnboardingActions {
   setWeeklyRuns: (value: WeeklyRuns | null) => void
   setLocationPermission: (value: LocationPermission) => void
   setMotionFitnessSupport: (value: MotionFitnessSupport) => void
+  completeOnboarding: () => void
+  completeBaselineMeasurement: () => void
   reset: () => void
 }
 
@@ -24,11 +26,13 @@ const initialData: OnboardingData = {
   locationPermission: null,
   motionFitnessSupport: null,
   timeOnlyMode: null,
+  onboardingCompleted: false,
+  baselineMeasurementCompleted: false,
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialData,
       setExperienceLevel: (experienceLevel) => set({ experienceLevel }),
       setWeeklyRuns: (weeklyRuns) => set({ weeklyRuns }),
@@ -38,6 +42,15 @@ export const useOnboardingStore = create<OnboardingState>()(
           timeOnlyMode: locationPermission === null ? null : locationPermission === 'denied',
         }),
       setMotionFitnessSupport: (motionFitnessSupport) => set({ motionFitnessSupport }),
+      // 이미 true이면 상태를 바꾸지 않는다. (멱등)
+      completeOnboarding: () => {
+        if (get().onboardingCompleted) return
+        set({ onboardingCompleted: true })
+      },
+      completeBaselineMeasurement: () => {
+        if (get().baselineMeasurementCompleted) return
+        set({ baselineMeasurementCompleted: true })
+      },
       reset: () => set(initialData),
     }),
     {
@@ -48,6 +61,8 @@ export const useOnboardingStore = create<OnboardingState>()(
         locationPermission: state.locationPermission,
         motionFitnessSupport: state.motionFitnessSupport,
         timeOnlyMode: state.timeOnlyMode,
+        onboardingCompleted: state.onboardingCompleted,
+        baselineMeasurementCompleted: state.baselineMeasurementCompleted,
       }),
     },
   ),
