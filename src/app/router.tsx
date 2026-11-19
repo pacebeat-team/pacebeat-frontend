@@ -16,6 +16,7 @@ import { ArrivalPage } from '../pages/running/ArrivalPage'
 import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
+import { ProfileEditPage } from '../pages/my/ProfileEditPage'
 import { SplashPage } from '../pages/SplashPage'
 import { IntroPage } from '../pages/onboarding/IntroPage'
 import { ExperiencePage } from '../pages/onboarding/ExperiencePage'
@@ -116,7 +117,10 @@ export const router = createBrowserRouter([
       },
       {
         path: 'my',
-        element: <MyPage />,
+        children: [
+          { index: true, element: <MyPage /> },
+          { path: 'profile', element: <ProfileEditPage /> },
+        ],
       },
       {
         path: '*',

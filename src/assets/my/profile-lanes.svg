@@ -1,0 +1,14 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="390" height="262" viewBox="0 0 390 262" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="decoration / running lanes" opacity="0.25" clip-path="url(#clip0_0_151)">
+<path id="path / contour" d="M169.5 250C272.058 236.237 390.199 142.781 406.5 67.5M189 288.5C317.348 277.198 410.034 209.484 429.5 117.5M165 205C267.557 191.237 376.199 79.2814 392.5 4.00006" stroke-width="2" stroke="url(#paint0_linear_0_151)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_151" x1="374.105" y1="87.6901" x2="286.121" y2="225.214" gradientUnits="userSpaceOnUse">
+<stop offset="0.370192" stop-color="#CFFF00"/>
+<stop offset="1" stop-color="#7C9900" stop-opacity="0"/>
+</linearGradient>
+<clipPath id="clip0_0_151">
+<rect width="390" height="262" fill="white"/>
+</clipPath>
+</defs>
+</svg>
