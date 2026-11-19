@@ -152,7 +152,7 @@ export function HomePage() {
 
       <div className="flex w-full flex-col px-[10px]">
         {records.lastRunText !== null && (
-          // Figma 모양(chevron 없음)은 그대로 두고, 가장 최근 기록의 상세(06)로 연결한다.
+          // Figma `row / 지난 러닝`처럼 chevron을 보이고, 가장 최근 기록의 상세(06)로 연결한다.
           <>
             <Link
               to={records.lastRunRecordId === null ? RECORDS_PATH : `${RECORDS_PATH}/${records.lastRunRecordId}`}
@@ -160,6 +160,7 @@ export function HomePage() {
             >
               <span className="min-w-0 flex-1 text-[16px] leading-[24px] text-ink">지난 러닝</span>
               <span className="shrink-0 text-right text-[14px] leading-[22px] text-muted">{records.lastRunText}</span>
+              <img src={chevronRight} alt="" aria-hidden="true" className="size-[20px] shrink-0" />
             </Link>
             <div className="h-px bg-line" aria-hidden="true" />
           </>
