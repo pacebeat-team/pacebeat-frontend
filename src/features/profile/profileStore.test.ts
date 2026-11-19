@@ -142,15 +142,28 @@ describe('동의', () => {
 })
 
 describe('reset', () => {
-  test('프로필과 동의를 모두 초기값으로 되돌리고 저장값도 갱신한다', () => {
+  test('프로필, 동의, 완료 시각을 모두 초기값으로 되돌리고 저장값도 갱신한다', () => {
     const { storage, map } = createFakeStorage()
     const store = createProfileStore(storage)
-    const initial = structuredClone({ profile: store.getState().profile, consent: store.getState().consent })
+    const initial = structuredClone({
+      profile: store.getState().profile,
+      consent: store.getState().consent,
+      completedAt: store.getState().completedAt,
+    })
     store.getState().setProfile({ nickname: '희규', birthYear: 2003, gender: 'female', heightCm: 165, weightKg: 52 })
     store.getState().setConsent({ ageOver14: true })
     store.getState().recordConsent('v1', 1)
+    store.getState().completeProfile(2)
     store.getState().reset()
-    assert.deepEqual({ profile: store.getState().profile, consent: store.getState().consent }, initial)
+    assert.deepEqual(
+      {
+        profile: store.getState().profile,
+        consent: store.getState().consent,
+        completedAt: store.getState().completedAt,
+      },
+      initial,
+    )
+    assert.equal(store.getState().completedAt, null)
     assert.deepEqual(savedState(map), initial)
   })
 })
@@ -162,7 +175,7 @@ describe('저장과 복원', () => {
     store.getState().setProfile({ nickname: '희규', heightCm: 165 })
     store.getState().recordConsent('v1', 5)
     const state = savedState(map)
-    assert.deepEqual(Object.keys(state).sort(), ['consent', 'profile']) // 함수(액션)는 저장하지 않는다
+    assert.deepEqual(Object.keys(state).sort(), ['completedAt', 'consent', 'profile']) // 함수(액션)는 저장하지 않는다
     assert.equal(state.profile.nickname, '희규')
     assert.equal(state.profile.heightCm, 165)
     assert.equal(state.profile.weightKg, null)
@@ -240,6 +253,114 @@ describe('저장과 복원', () => {
   })
 })
 
+describe('프로필 가입 완료 시각', () => {
+  test('최초 상태의 completedAt은 null이다', () => {
+    const { storage } = createFakeStorage()
+    assert.equal(createProfileStore(storage).getState().completedAt, null)
+  })
+
+  test('completeProfile은 지정한 시각을 기록한다', () => {
+    const { storage } = createFakeStorage()
+    const store = createProfileStore(storage)
+    store.getState().completeProfile(1234)
+    assert.equal(store.getState().completedAt, 1234)
+  })
+
+  test('completeProfile의 시각 기본값은 현재 시각이다', () => {
+    const { storage } = createFakeStorage()
+    const store = createProfileStore(storage)
+    const before = Date.now()
+    store.getState().completeProfile()
+    const after = Date.now()
+    const value = store.getState().completedAt
+    assert.ok(value !== null && value >= before && value <= after)
+  })
+
+  test('여러 번 불러도 처음 기록한 시각을 유지한다 (멱등)', () => {
+    const { storage, map } = createFakeStorage()
+    const store = createProfileStore(storage)
+    store.getState().completeProfile(100)
+    store.getState().completeProfile(200)
+    store.getState().completeProfile()
+    assert.equal(store.getState().completedAt, 100)
+    assert.equal(savedState(map).completedAt, 100)
+  })
+
+  test('올바르지 않은 시각(NaN, Infinity)은 기록하지 않고 이후 올바른 호출은 정상 기록된다', () => {
+    const { storage } = createFakeStorage()
+    const store = createProfileStore(storage)
+    store.getState().completeProfile(Number.NaN)
+    store.getState().completeProfile(Number.POSITIVE_INFINITY)
+    assert.equal(store.getState().completedAt, null)
+    store.getState().completeProfile(42)
+    assert.equal(store.getState().completedAt, 42)
+  })
+
+  test('profile이나 consent를 바꿔도 completedAt은 그대로다', () => {
+    const { storage } = createFakeStorage()
+    const store = createProfileStore(storage)
+    store.getState().completeProfile(100)
+    store.getState().setProfile({ nickname: '희규' })
+    store.getState().setConsent({ marketing: true })
+    store.getState().recordConsent('v1', 5)
+    assert.equal(store.getState().completedAt, 100)
+  })
+
+  test('completedAt은 새 Store를 만들어도 복원된다', () => {
+    const { storage } = createFakeStorage()
+    createProfileStore(storage).getState().completeProfile(555)
+    assert.equal(createProfileStore(storage).getState().completedAt, 555)
+  })
+
+  test('completedAt이 없는 기존 저장값은 null로 복원하고 다른 값은 보존한다', () => {
+    const { storage } = createFakeStorage({
+      [PROFILE_STORAGE_KEY]: JSON.stringify({
+        state: { profile: { nickname: '희규', heightCm: 170 }, consent: { ageOver14: true, consentedAt: 3 } },
+        version: 0,
+      }),
+    })
+    const state = createProfileStore(storage).getState()
+    assert.equal(state.completedAt, null)
+    assert.equal(state.profile.nickname, '희규')
+    assert.equal(state.profile.heightCm, 170)
+    assert.equal(state.consent.consentedAt, 3)
+  })
+
+  test('숫자가 아닌 저장값은 null로 복원하고 유한한 숫자는 그대로 복원한다', () => {
+    for (const bad of ['1700000000000', true, {}, [], null]) {
+      const { storage } = createFakeStorage({
+        [PROFILE_STORAGE_KEY]: JSON.stringify({ state: { completedAt: bad }, version: 0 }),
+      })
+      assert.equal(createProfileStore(storage).getState().completedAt, null, JSON.stringify(bad))
+    }
+    const { storage } = createFakeStorage({
+      [PROFILE_STORAGE_KEY]: JSON.stringify({ state: { completedAt: 0 }, version: 0 }),
+    })
+    assert.equal(createProfileStore(storage).getState().completedAt, 0)
+  })
+
+  test('잘못된 completedAt이 profile과 consent 복원에 영향을 주지 않는다', () => {
+    const { storage } = createFakeStorage({
+      [PROFILE_STORAGE_KEY]: JSON.stringify({
+        state: { profile: { nickname: '희규' }, consent: { termsOfService: true }, completedAt: 'x' },
+        version: 0,
+      }),
+    })
+    const state = createProfileStore(storage).getState()
+    assert.equal(state.completedAt, null)
+    assert.equal(state.profile.nickname, '희규')
+    assert.equal(state.consent.termsOfService, true)
+  })
+
+  test('reset 뒤에 새 Store를 만들면 완료하지 않은 상태(null)로 복원된다', () => {
+    const { storage } = createFakeStorage()
+    const store = createProfileStore(storage)
+    store.getState().completeProfile(9)
+    store.getState().reset()
+    assert.equal(createProfileStore(storage).getState().completedAt, null)
+  })
+})
+
 describe('저장소 쓰기 실패', () => {
   function createFailingStorage(initial: Record<string, string> = {}) {
     const { storage } = createFakeStorage(initial)
@@ -258,6 +379,8 @@ describe('저장소 쓰기 실패', () => {
   test('setItem이 던져도 모든 액션이 예외 없이 끝나고 메모리 상태는 바뀐다', () => {
     const store = createProfileStore(createFailingStorage())
     assert.doesNotThrow(() => store.getState().setProfile({ nickname: '희규', heightCm: 165 }))
+    assert.doesNotThrow(() => store.getState().completeProfile(77))
+    assert.equal(store.getState().completedAt, 77) // 메모리 상태는 바뀐다. 저장이 됐다는 뜻은 아니다.
     assert.doesNotThrow(() => store.getState().setConsent({ ageOver14: true }))
     assert.doesNotThrow(() => store.getState().recordConsent(null, 5))
     assert.equal(store.getState().profile.nickname, '희규')

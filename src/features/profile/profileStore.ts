@@ -10,6 +10,9 @@ export const PROFILE_STORAGE_KEY = 'pacebeat-profile'
 export interface ProfileStateData {
   profile: ProfileData
   consent: ConsentData
+  // 프로필 가입을 완료한 시각 (Unix epoch milliseconds). 키·몸무게 화면에서 "시작하기"나 "건너뛰기"를 눌렀을 때만 기록한다.
+  // 필수 동의와 닉네임을 저장했다는 사실만으로는 기록하지 않는다. null은 아직 완료하지 않은 상태다.
+  completedAt: number | null
 }
 
 interface ProfileActions {
@@ -19,7 +22,9 @@ interface ProfileActions {
   setConsent: (patch: Partial<Record<ConsentKey, boolean>>) => void
   // 동의 시점의 약관 버전과 시각을 기록한다. 약관 버전이 확정되기 전에는 null을 넘겨도 시각은 기록된다.
   recordConsent: (policyVersion: string | null, now?: number) => void
-  // 프로필과 동의를 모두 초기화한다.
+  // 프로필 가입 완료 시각을 기록한다. 이미 기록돼 있으면 처음 시각을 그대로 둔다. (여러 번 불러도 같은 결과)
+  completeProfile: (now?: number) => void
+  // 프로필, 동의, 완료 시각을 모두 초기화한다.
   reset: () => void
 }
 
@@ -37,6 +42,7 @@ function createInitialData(): ProfileStateData {
       policyVersion: null,
       consentedAt: null,
     },
+    completedAt: null,
   }
 }
 
@@ -131,7 +137,7 @@ export function createProfileStore(storage?: StateStorage) {
 
   return createStore<ProfileState>()(
     persist(
-      (set) => ({
+      (set, get) => ({
         ...createInitialData(),
         setProfile: (patch) =>
           set((state) => {
@@ -148,19 +154,31 @@ export function createProfileStore(storage?: StateStorage) {
           set((state) => ({ consent: { ...state.consent, ...withoutUndefined(patch) } })),
         recordConsent: (policyVersion, now = Date.now()) =>
           set((state) => ({ consent: { ...state.consent, policyVersion, consentedAt: now } })),
+        completeProfile: (now = Date.now()) => {
+          if (get().completedAt !== null) return
+          if (!Number.isFinite(now)) return // 시각이 올바르지 않으면 기록하지 않는다. (NaN은 저장하면 null이 되어 복원 결과와 어긋난다.)
+          set({ completedAt: now })
+        },
         reset: () => set(createInitialData()),
       }),
       {
         name: PROFILE_STORAGE_KEY,
         storage: createJSONStorage(() => resolved),
-        partialize: (state): ProfileStateData => ({ profile: state.profile, consent: state.consent }),
+        partialize: (state): ProfileStateData => ({
+          profile: state.profile,
+          consent: state.consent,
+          completedAt: state.completedAt,
+        }),
         // 저장된 값에 빠졌거나 타입이 맞지 않는 필드는 기본값으로 채운다. profile과 consent를 각각 복원한다.
+        // completedAt은 유한한 숫자일 때만 복원하고, 없거나 타입이 틀리면 완료하지 않은 상태(null)로 시작한다.
         merge: (persisted, current) => {
           const saved = isRecord(persisted) ? persisted : {}
           return {
             ...current,
             profile: restoreFields(current.profile, saved.profile, PROFILE_FIELD_CHECKS),
             consent: restoreFields(current.consent, saved.consent, CONSENT_FIELD_CHECKS),
+            completedAt:
+              typeof saved.completedAt === 'number' && Number.isFinite(saved.completedAt) ? saved.completedAt : null,
           }
         },
       },
