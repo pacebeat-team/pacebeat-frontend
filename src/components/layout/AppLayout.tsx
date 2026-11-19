@@ -36,10 +36,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   // 러닝 화면은 Figma 프레임(390x844, 상태바 44px 포함)과 같은 기하로 그린다.
   // - 테두리를 두지 않아 안쪽 폭이 390px이고, 좁은 화면(430px 이하)에서는 화면 전체를 채운다.
   // - 위쪽은 상태바 영역 44px(기기 Safe Area가 더 크면 그 값)을 비운다.
-  const shell = isRun
+  // Home(03)도 같은 390x844 프레임(상태바 44px 포함, 하단 내비 108px)이므로 같은 기하를 쓴다.
+  const isFramed = isRun || normalizeRunPath(location.pathname) === '/home'
+  const shell = isFramed
     ? 'max-[431px]:fixed max-[431px]:inset-0 max-[431px]:h-auto max-[431px]:max-h-none max-[431px]:max-w-none max-[431px]:rounded-none max-[431px]:shadow-none'
     : 'border border-neutral-200/70'
-  const padding = isRun
+  const padding = isFramed
     ? hideNavigation
       ? 'pt-[max(44px,env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)]'
       : 'pt-[max(44px,env(safe-area-inset-top,0px))] pb-[108px]'
