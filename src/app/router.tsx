@@ -6,6 +6,9 @@ import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { SplashPage } from '../pages/SplashPage'
+import { IntroPage } from '../pages/onboarding/IntroPage'
+import { ExperiencePage } from '../pages/onboarding/ExperiencePage'
+import { PermissionsPage } from '../pages/onboarding/PermissionsPage'
 
 export const router = createBrowserRouter([
   {
@@ -15,6 +18,15 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <SplashPage />,
+      },
+      {
+        path: 'onboarding',
+        children: [
+          { index: true, element: <Navigate to="/onboarding/intro" replace /> },
+          { path: 'intro', element: <IntroPage /> },
+          { path: 'experience', element: <ExperiencePage /> },
+          { path: 'permissions', element: <PermissionsPage /> },
+        ],
       },
       {
         path: 'home',
