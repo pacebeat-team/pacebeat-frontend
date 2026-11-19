@@ -11,7 +11,7 @@ export function DataExportPage() {
   const [format, setFormat] = useState<(typeof FORMATS)[number]>('CSV')
   return (
     <DeviceScreen title="데이터 내보내기" onBack={goBack} onConfirm={goBack}>
-      <p className="mt-4 text-[16px] leading-[22px]">러닝 날짜, 거리, 시간, 페이스와 저장된 인솔 측정 데이터를 내보낼 수 있어요.</p>
+      <p className="mt-4 text-[16px] leading-[22px]">러닝 날짜, 거리, 시간, 페이스를 내보내는 화면이에요.</p>
       <h3 id="export-format" className="mt-6 text-[18px] font-medium leading-[25px]">
         파일 형식
       </h3>

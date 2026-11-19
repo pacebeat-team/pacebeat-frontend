@@ -32,7 +32,7 @@ export function ProfileEditPage() {
         <ScreenHeader title="프로필" onBack={goBack} />
         <h2 className="mt-[14px] text-[34px] font-light leading-[44px] tracking-[-1.02px]">닉네임</h2>
         <div className="mt-[26px]">
-          <NicknameField value={value} onChange={setValue} feedback={feedback} onEnter={save} />
+          <NicknameField value={value} onChange={setValue} feedback={feedback} onEnter={() => feedback.canSubmit && value.trim() !== saved && save()} />
         </div>
       </div>
       <div className="shrink-0 px-3 pb-[9px] pt-2">

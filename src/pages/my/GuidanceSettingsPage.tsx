@@ -44,9 +44,9 @@ function FixedOffRow({ title, description }: { title: string; description: strin
   return (
     <div className="flex h-[76px] w-full items-center gap-4">
       <RowText title={title} description={description} />
-      <span role="switch" aria-checked={false} aria-disabled="true" aria-label={title} className="shrink-0">
+      <button type="button" role="switch" aria-checked={false} disabled aria-label={title} className="shrink-0">
         <Toggle on={false} />
-      </span>
+      </button>
     </div>
   )
 }

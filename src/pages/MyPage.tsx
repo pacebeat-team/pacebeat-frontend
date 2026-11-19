@@ -84,7 +84,7 @@ export function MyPage() {
         )}
         <MenuRow to={MEASUREMENT_GUIDE_PATH} label="기초 측정" value={baseline === null ? undefined : '다시 측정'} />
         <Divider />
-        <MenuRow to={MY_ROUTES.guidance} label="안내 설정" value="음악 · 음성 · 진동" />
+        <MenuRow to={MY_ROUTES.guidance} label="안내 설정" value="음악 · 음성" />
         <Divider />
         <MenuRow to={MY_ROUTES.device} label="스마트 인솔" />
         <Divider />
