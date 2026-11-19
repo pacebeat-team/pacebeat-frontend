@@ -84,3 +84,46 @@ body {
   background-color: #f0f0f0;
   padding: 12px 8px;
 }
+
+/* Figma 프로토타입 동작 */
+/* motion / running mascot: Pose=Low → (0.8초 뒤) High → (0.8초 뒤) Low. 전환은 SMART_ANIMATE 0.4초 ease-in-out, 화면 이동 없이 반복. High는 마스코트가 10px 아래. */
+@keyframes run-mascot-bounce {
+  0%,
+  33.333% {
+    transform: translateY(0);
+    animation-timing-function: ease-in-out;
+  }
+  50%,
+  83.333% {
+    transform: translateY(var(--run-mascot-shift, 10px));
+    animation-timing-function: ease-in-out;
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.run-mascot {
+  animation: run-mascot-bounce 2.4s infinite;
+}
+
+/* 화면 전환: DISSOLVE 0.15초 ease-out */
+@keyframes route-dissolve {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.route-dissolve {
+  animation: route-dissolve 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-mascot,
+  .route-dissolve {
+    animation: none;
+  }
+}

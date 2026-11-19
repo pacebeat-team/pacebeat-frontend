@@ -1,7 +1,10 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNavigation } from '../common/BottomNavigation'
-import { isRunNavVisible, isRunPath } from '../../features/running/runFlow'
+import { isFinishedPath, isRunNavVisible, isRunPath, RUN_PATHS, normalizeRunPath } from '../../features/running/runFlow'
+import { isGoalCompletion } from '../../features/running/runResult'
+import { runResultStore, useRunResultStore } from '../../features/running/runResultStore'
+import { useRunStore } from '../../features/running/runStore'
 
 export interface AppLayoutProps {
   children?: ReactNode
@@ -14,7 +17,20 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isMeasurement = location.pathname.startsWith('/measurement')
   // 러닝 준비 흐름에서는 목표·음악 화면에서만 하단 네비를 보인다.
   const isRun = isRunPath(location.pathname)
-  const isRunHidden = isRun && !isRunNavVisible(location.pathname)
+  // 기록 저장에 성공한 뒤 결과 흐름을 벗어나면 끝난 세션을 정리한다.
+  const saved = useRunResultStore((state) => state.saved)
+  const inFinishedFlow = isFinishedPath(location.pathname)
+  useEffect(() => {
+    if (saved && !inFinishedFlow) runResultStore.getState().finalize()
+  }, [saved, inFinishedFlow])
+  const goalDone = useRunStore((state) => isGoalCompletion(state.activeSession))
+  const sessionStatus = useRunStore((state) => state.activeSession?.session.status ?? null)
+  const isRunHidden = isRun && !isRunNavVisible(location.pathname, sessionStatus)
+  // 카운트다운과 진행 화면은 라임 배경을 상태바 영역까지 채운다.
+  const runPath = normalizeRunPath(location.pathname)
+  // 도착·완주 화면은 어두운 배경을 상태바 영역까지 채운다.
+  const isDark = goalDone && (runPath === RUN_PATHS.arrival || runPath === RUN_PATHS.result)
+  const isLime = runPath === RUN_PATHS.countdown || (runPath === RUN_PATHS.active && sessionStatus === 'running')
   const hideNavigation = isSplash || isOnboarding || isMeasurement || isRunHidden
 
   // 러닝 화면은 Figma 프레임(390x844, 상태바 44px 포함)과 같은 기하로 그린다.
@@ -35,10 +51,22 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div
-      className={`relative flex flex-col w-full max-w-[390px] h-[844px] max-h-[calc(100dvh-24px)] mx-auto bg-[#FEFEFE] rounded-[44px] shadow-[0_14px_45px_rgba(0,0,0,0.08)] overflow-hidden ${shell} ${padding}`}
+      className={`relative flex flex-col w-full max-w-[390px] h-[844px] max-h-[calc(100dvh-24px)] mx-auto ${isDark ? 'bg-[linear-gradient(143.9deg,#000_22.3%,#1a1a1a_103.1%)]' : isLime ? 'bg-[linear-gradient(155.4deg,#c4fa3f_32.8%,#e4ffa5_108.5%)]' : 'bg-[#FEFEFE]'} rounded-[44px] shadow-[0_14px_45px_rgba(0,0,0,0.08)] overflow-hidden ${shell} ${padding}`}
     >
       <main className="flex-1 w-full flex flex-col overflow-y-auto">
-        {children ?? <Outlet />}
+        {children ?? (
+          isRun ? (
+            // 러닝 화면 전환은 Figma의 DISSOLVE 0.15초. 도착 → 완주는 도착 화면이 직접 움직이므로 다시 깜빡이지 않는다.
+            <div
+              key={location.pathname}
+              className={`flex min-h-0 flex-1 flex-col ${(location.state as { fromArrival?: boolean } | null)?.fromArrival ? '' : 'route-dissolve'}`}
+            >
+              <Outlet />
+            </div>
+          ) : (
+            <Outlet />
+          )
+        )}
       </main>
       {!hideNavigation && <BottomNavigation />}
     </div>

@@ -1,5 +1,6 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
+import type { StoreApi } from 'zustand/vanilla'
 import { clampDurationSec, rescaleDurationSec } from './goal.ts'
 import { NO_GOAL } from './record.ts'
 import { isRunActive, pauseRun, resumeRun, startRun, stopRun } from './runSession.ts'
@@ -12,9 +13,8 @@ import type { GoalDistanceKm, RunMode } from './types.ts'
 // 일반 RUN 전용 Store.
 // - 기초 측정 Store(measurementStore)·온보딩 Store와 독립이다. 서로 읽거나 쓰지 않는다.
 // - 목표 draft·최근 목표·선택 음악, 활성 세션 상태를 가진다. 파생값(경과 시간, 페이스 등)은 저장하지 않는다.
-// - 저장은 전용 키(pacebeat:run:*:v1)에만 한다. 저장이 실패해도 메모리 상태는 유지한다(예외를 던지지 않는다).
-//   저장 실패를 알아야 하는 기록 저장(records)은 Store가 아니라 RunStorage.saveRecord를 직접 쓴다.
-// - 이 Issue에서는 저장된 세션을 읽어 상태에 넣지 않는다(복원 동작은 세션 안정화 Issue). 시작할 때는 항상 세션이 없다.
+// - 저장하는 것은 목표 draft뿐이다(전용 키 pacebeat:run:draft:v1, 실패해도 메모리 상태는 유지한다).
+//   진행 중 세션은 메모리에만 있고 저장하지 않는다. 완료한 러닝의 기록(records)은 RunStorage.saveRecord를 직접 쓴다.
 
 const MAX_RECENT_GOALS = 2
 
@@ -39,9 +39,15 @@ interface RunStoreActions {
   recordDistanceSample: (elapsedMs: number, distanceM: number) => void
   // 세션 상태를 지운다(저장을 마쳤거나 폐기할 때).
   clearSession: () => void
+  // GPS 신호가 끊긴 구간을 연다(러닝 경과 시간 ms). 이미 열린 구간이 있으면 아무것도 하지 않는다.
+  openGpsGap: (lostAtMs: number) => void
+  // 열린 끊김 구간을 복구 시각으로 닫는다.
+  closeGpsGap: (recoveredAtMs: number) => void
 }
 
 export type RunStoreState = RunStoreData & RunStoreActions
+
+export type RunStoreApi = StoreApi<RunStoreState>
 
 function pushRecentGoal(recent: readonly RecentGoal[], goal: RecentGoal): RecentGoal[] {
   const others = recent.filter(
@@ -51,7 +57,7 @@ function pushRecentGoal(recent: readonly RecentGoal[], goal: RecentGoal): Recent
 }
 
 // storage를 주입하면 테스트에서 가짜 저장소를 쓸 수 있다.
-export function createRunStore(storage: RunStorage = createRunStorage()) {
+export function createRunStore(storage: RunStorage = createRunStorage()): RunStoreApi {
   const store = createStore<RunStoreState>()((set, get) => ({
     draft: storage.loadDraft(),
     activeSession: null,
@@ -83,7 +89,6 @@ export function createRunStore(storage: RunStorage = createRunStorage()) {
           session,
           distanceSamples: [],
           gpsGaps: [],
-          lastSeenAt: null,
         },
         draft: isGps
           ? {
@@ -98,11 +103,15 @@ export function createRunStore(storage: RunStorage = createRunStorage()) {
     },
     pauseRun: (now) =>
       set(({ activeSession }) =>
-        activeSession === null ? {} : { activeSession: { ...activeSession, session: pauseRun(activeSession.session, now) } },
+        activeSession === null
+          ? {}
+          : { activeSession: { ...activeSession, session: pauseRun(activeSession.session, now) } },
       ),
     resumeRun: (now) =>
       set(({ activeSession }) =>
-        activeSession === null ? {} : { activeSession: { ...activeSession, session: resumeRun(activeSession.session, now) } },
+        activeSession === null
+          ? {}
+          : { activeSession: { ...activeSession, session: resumeRun(activeSession.session, now) } },
       ),
     stopRun: (now, reason = 'user') =>
       set(({ activeSession }) =>
@@ -122,18 +131,28 @@ export function createRunStore(storage: RunStorage = createRunStorage()) {
             },
       ),
     clearSession: () => set({ activeSession: null }),
+    openGpsGap: (lostAtMs) =>
+      set(({ activeSession }) => {
+        if (activeSession === null || activeSession.mode !== 'gps' || !Number.isFinite(lostAtMs)) return {}
+        const last = activeSession.gpsGaps[activeSession.gpsGaps.length - 1]
+        if (last !== undefined && last.recoveredAtMs === null) return {}
+        return { activeSession: { ...activeSession, gpsGaps: [...activeSession.gpsGaps, { lostAtMs, recoveredAtMs: null }] } }
+      }),
+    closeGpsGap: (recoveredAtMs) =>
+      set(({ activeSession }) => {
+        if (activeSession === null || !Number.isFinite(recoveredAtMs)) return {}
+        const last = activeSession.gpsGaps[activeSession.gpsGaps.length - 1]
+        if (last === undefined || last.recoveredAtMs !== null) return {}
+        const closed = { ...last, recoveredAtMs: Math.max(recoveredAtMs, last.lostAtMs) }
+        return { activeSession: { ...activeSession, gpsGaps: [...activeSession.gpsGaps.slice(0, -1), closed] } }
+      }),
   }))
 
-  // 상태가 바뀌면 전용 키에 저장한다. 저장 실패는 무시한다(메모리 상태 유지).
   store.subscribe((state, previous) => {
     try {
       if (state.draft !== previous.draft) storage.saveDraft(state.draft)
-      if (state.activeSession !== previous.activeSession) {
-        if (state.activeSession === null) storage.clearSession()
-        else storage.saveSession(state.activeSession)
-      }
     } catch {
-      // 저장 실패는 무시한다.
+      // draft 저장 실패는 무시한다(메모리 상태 유지).
     }
   })
 

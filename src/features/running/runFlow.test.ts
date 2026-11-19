@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { getMusicPreviewPath, isRunNavVisible, isRunPath, normalizeRunPath, resolveRunRedirect, RUN_PATHS } from './runFlow.ts'
+import { getMusicPreviewPath, getRunReturnPath, getRunSessionPhase, isRunNavVisible, isRunPath, normalizeRunPath, resolveRunRedirect, RUN_PATHS } from './runFlow.ts'
 import { createRunSetupStore } from './runSetupStore.ts'
 import { createRunStore } from './runStore.ts'
 import { createRunStorage } from './runStorage.ts'
@@ -86,6 +86,23 @@ describe('진행 단계 Store', () => {
     assert.equal(store.getState().level, 1)
     assert.equal(store.getState().mode, null)
     assert.equal(resolveRunRedirect(RUN_PATHS.ready, store.getState().level), RUN_PATHS.goal)
+  })
+})
+
+describe('카운트다운 취소', () => {
+  test('backToReady: 시작 신호를 지우고 준비 단계(3)로 돌아간다. 시작 신호가 없으면 아무 일도 없다', () => {
+    const store = createRunSetupStore()
+    store.getState().enterGoal()
+    store.getState().confirmGoal()
+    store.getState().confirmMusic()
+    store.getState().backToReady()
+    assert.equal(store.getState().level, 3)
+    store.getState().signalStart('gps')
+    store.getState().backToReady()
+    assert.equal(store.getState().level, 3)
+    assert.equal(store.getState().mode, null)
+    assert.equal(resolveRunRedirect(RUN_PATHS.ready, store.getState().level), null)
+    assert.equal(resolveRunRedirect(RUN_PATHS.countdown, store.getState().level), RUN_PATHS.goal)
   })
 })
 
@@ -206,5 +223,47 @@ describe('Figma 대조 화면 구조(소스 확인)', () => {
   test('Music 목록의 마지막 곡 아래에는 구분선이 없고, 시간 선택 목록도 같다', () => {
     assert.match(read('MusicPage.tsx'), /border-b border-line last:border-b-0/)
     assert.match(read('TimePickerPage.tsx'), /border-b border-line last:border-b-0/)
+  })
+})
+
+describe('세션 phase와 러닝 화면 접근', () => {
+  test('진행 중이면 진행·종료 확인 화면만 열리고 나머지는 진행 화면으로 보낸다', () => {
+    assert.equal(resolveRunRedirect('/running/active', 0, 'active'), null)
+    assert.equal(resolveRunRedirect('/running/end', 0, 'active'), null)
+    for (const path of ['/running', '/running/time', '/running/music', '/running/ready', '/running/countdown', '/running/result', '/running/x']) {
+      assert.equal(resolveRunRedirect(path, 4, 'active'), '/running/active')
+    }
+  })
+  test('종료된 세션이 있으면 결과 화면만 열린다', () => {
+    assert.equal(resolveRunRedirect('/running/result', 0, 'finished'), null)
+    assert.equal(resolveRunRedirect('/running', 4, 'finished'), '/running/result')
+    assert.equal(resolveRunRedirect('/running/active', 4, 'finished'), '/running/result')
+  })
+  test('세션이 없으면 진행·종료·결과 화면은 목표 화면으로 보낸다', () => {
+    for (const path of ['/running/active', '/running/end', '/running/result']) {
+      assert.equal(resolveRunRedirect(path, 4, 'none'), '/running')
+    }
+  })
+  test('카운트다운은 시작 신호(단계 4)가 있어야 열린다', () => {
+    assert.equal(resolveRunRedirect('/running/countdown', 3), '/running')
+    assert.equal(resolveRunRedirect('/running/countdown', 4), null)
+  })
+  test('getRunSessionPhase·getRunReturnPath', () => {
+    assert.equal(getRunSessionPhase(null), 'none')
+    assert.equal(getRunSessionPhase({ status: 'running' }), 'active')
+    assert.equal(getRunSessionPhase({ status: 'paused' }), 'active')
+    assert.equal(getRunSessionPhase({ status: 'finished' }), 'finished')
+    assert.equal(getRunReturnPath('active'), '/running/active')
+    assert.equal(getRunReturnPath('finished'), '/running/result')
+    assert.equal(getRunReturnPath('none'), '/running')
+  })
+  test('하단 네비: 진행 중 진행 화면에서만 보이고 일시정지·종료 확인·카운트다운·결과에서는 숨긴다', () => {
+    assert.equal(isRunNavVisible('/running/active', 'running'), true)
+    assert.equal(isRunNavVisible('/running/active', 'paused'), false)
+    assert.equal(isRunNavVisible('/running/active', null), false)
+    for (const path of ['/running/end', '/running/countdown', '/running/result', '/running/ready']) {
+      assert.equal(isRunNavVisible(path, 'running'), false)
+    }
+    assert.equal(isRunNavVisible('/running'), true)
   })
 })

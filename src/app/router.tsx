@@ -8,6 +8,11 @@ import { MusicPage } from '../pages/running/MusicPage'
 import { MusicPreviewPage } from '../pages/running/MusicPreviewPage'
 import { ReadyPage } from '../pages/running/ReadyPage'
 import { CountdownPage } from '../pages/running/CountdownPage'
+import { ActivePage as RunActivePage } from '../pages/running/ActivePage'
+import { EndConfirmPage } from '../pages/running/EndConfirmPage'
+import { ResultPage as RunResultPage } from '../pages/running/ResultPage'
+import { ResultDetailsPage } from '../pages/running/ResultDetailsPage'
+import { ArrivalPage } from '../pages/running/ArrivalPage'
 import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
@@ -60,6 +65,11 @@ export const router = createBrowserRouter([
           { path: 'music/:trackId', element: <MusicPreviewPage /> },
           { path: 'ready', element: <ReadyPage /> },
           { path: 'countdown', element: <CountdownPage /> },
+          { path: 'active', element: <RunActivePage /> },
+          { path: 'end', element: <EndConfirmPage /> },
+          { path: 'arrival', element: <ArrivalPage /> },
+          { path: 'result', element: <RunResultPage /> },
+          { path: 'result/details', element: <ResultDetailsPage /> },
           { path: '*', element: <Navigate to="/running" replace /> },
         ],
       },

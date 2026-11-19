@@ -4,7 +4,7 @@ import { STORAGE_KEY as MEASUREMENT_STORAGE_KEY } from '../measurement/sessionPe
 import { buildRunRecord } from './record.ts'
 import { startRun, stopRun } from './runSession.ts'
 import { createDefaultDraft, createRunStorage, isRunRecord, RUN_STORAGE_KEYS, RunStorageError } from './runStorage.ts'
-import type { RunKeyValueStorage, RunSessionSnapshot } from './runStorage.ts'
+import type { RunKeyValueStorage } from './runStorage.ts'
 import type { RunMode, RunRecord } from './types.ts'
 
 const BASE = 1_700_000_000_000
@@ -36,10 +36,9 @@ function makeRecord(recordId: string, mode: RunMode = 'gps', durationMs = 600_00
 }
 
 describe('저장 키', () => {
-  test('전용 키 3개이고 버전을 포함하며 기초 측정 키와 겹치지 않는다', () => {
+  test('전용 키 2개(목표 draft·완료 기록)이고 버전을 포함하며 기초 측정 키와 겹치지 않는다', () => {
     assert.deepEqual(RUN_STORAGE_KEYS, {
       draft: 'pacebeat:run:draft:v1',
-      session: 'pacebeat:run:session:v1',
       records: 'pacebeat:run:records:v1',
     })
     for (const key of Object.values(RUN_STORAGE_KEYS)) {
@@ -57,8 +56,6 @@ describe('저장 키', () => {
     })
     storage.saveDraft(createDefaultDraft())
     storage.loadDraft()
-    storage.loadSession()
-    storage.clearSession()
     storage.saveRecord(makeRecord('a'))
     storage.loadRecords()
     assert.ok(!touched.includes(MEASUREMENT_STORAGE_KEY))
@@ -83,16 +80,6 @@ describe('기록 저장(records)', () => {
     assert.equal(records.length, 2)
     assert.deepEqual(records.map((record) => record.recordId), ['a', 'b']) // 제자리 덮어쓰기
     assert.equal(records[0].reflection?.memo, '좋았다')
-  })
-  test('60초 미만은 저장하지 않는다(too-short), 60초는 저장한다', () => {
-    const storage = createRunStorage(createMemoryStorage().storage)
-    assert.throws(
-      () => storage.saveRecord(makeRecord('short', 'gps', 59_900)),
-      (error) => error instanceof RunStorageError && error.code === 'too-short',
-    )
-    assert.equal(storage.loadRecords().length, 0)
-    storage.saveRecord(makeRecord('ok', 'gps', 60_000))
-    assert.equal(storage.loadRecords().length, 1)
   })
   test('TIME 기록은 거리·페이스 null로 저장되고 그대로 읽힌다', () => {
     const storage = createRunStorage(createMemoryStorage().storage)
@@ -185,39 +172,11 @@ describe('draft 저장', () => {
   })
 })
 
-describe('세션 저장(저장·읽기·삭제)', () => {
-  const snapshot: RunSessionSnapshot = {
-    mode: 'gps',
-    goal: { targetDistanceKm: 3, targetDurationSec: 1320 },
-    musicTrackId: null,
-    session: startRun(null, BASE, () => 'sess-1'),
-    distanceSamples: [{ elapsedMs: 1000, distanceM: 3 }],
-    gpsGaps: [{ lostAtMs: 5000, recoveredAtMs: null }],
-    lastSeenAt: null,
-  }
-  test('저장·읽기·삭제', () => {
-    const storage = createRunStorage(createMemoryStorage().storage)
-    assert.equal(storage.loadSession(), null)
-    storage.saveSession(snapshot)
-    assert.deepEqual(storage.loadSession(), snapshot)
-    storage.clearSession()
-    assert.equal(storage.loadSession(), null)
-  })
-  test('손상된 세션은 null이다', () => {
-    const kv = createMemoryStorage({
-      [RUN_STORAGE_KEYS.session]: JSON.stringify({ version: 1, data: { ...snapshot, session: { id: 1 } } }),
-    }).storage
-    assert.equal(createRunStorage(kv).loadSession(), null)
-  })
-})
-
 describe('저장소를 쓸 수 없는 환경', () => {
   test('읽기는 빈 값, 삭제는 무시, 쓰기는 unavailable 오류다', () => {
     const storage = createRunStorage(null)
     assert.deepEqual(storage.loadDraft(), createDefaultDraft())
-    assert.equal(storage.loadSession(), null)
     assert.deepEqual(storage.loadRecords(), [])
-    assert.doesNotThrow(() => storage.clearSession())
     assert.throws(
       () => storage.saveRecord(makeRecord('a')),
       (error) => error instanceof RunStorageError && error.code === 'unavailable',
