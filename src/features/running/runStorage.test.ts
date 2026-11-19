@@ -143,6 +143,16 @@ describe('기록 저장(records)', () => {
     assert.deepEqual(data[0], bad)
     assert.deepEqual(storage.loadRecords().map((record) => record.recordId), ['a', 'b'])
   })
+  test('saveRecord: 같은 recordId가 겹쳐 있으면 첫 항목만 덮어쓴다', () => {
+    const key = RUN_STORAGE_KEYS.records
+    const first = makeRecord('dup')
+    const second = makeRecord('dup', 'gps', 900_000)
+    const memory = createMemoryStorage({ [key]: JSON.stringify({ version: 1, data: [first, second] }) })
+    const edited = { ...first, reflection: { difficulty: 'easy' as const, reasons: [], memo: '' } }
+    createRunStorage(memory.storage).saveRecord(edited)
+    const data = (JSON.parse(memory.map.get(key) ?? '') as { data: unknown[] }).data
+    assert.deepEqual(data, [edited, second])
+  })
   test('isRunRecord: 센서 리포트가 null이 아니거나 회고 메모가 100자를 넘으면 거부한다', () => {
     const record = makeRecord('a')
     assert.equal(isRunRecord(record), true)

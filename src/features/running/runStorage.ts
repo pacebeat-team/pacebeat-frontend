@@ -251,8 +251,9 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
       // 읽을 수 없는 항목도 그대로 남긴다(다른 기록을 지우지 않는다). 저장 데이터 전체를 읽을 수 없으면 새로 시작한다.
       const saved = readRawRecords() ?? []
       const isSame = (item: unknown) => isRunRecord(item) && item.recordId === record.recordId
-      // 같은 recordId는 제자리에서 덮어쓴다. 새 기록은 끝에 추가한다.
-      write(RUN_STORAGE_KEYS.records, saved.some(isSame) ? saved.map((item) => (isSame(item) ? record : item)) : [...saved, record])
+      const index = saved.findIndex(isSame)
+      // 같은 recordId는 첫 항목만 제자리에서 덮어쓴다(같은 id가 겹친 손상 데이터의 다른 항목을 건드리지 않는다). 새 기록은 끝에 추가한다.
+      write(RUN_STORAGE_KEYS.records, index === -1 ? [...saved, record] : saved.map((item, i) => (i === index ? record : item)))
     },
   }
 }

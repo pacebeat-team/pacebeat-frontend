@@ -153,6 +153,16 @@ export function ReflectionSheetView({
         }
       }
     }
+    // 시트가 <main> 안에 있으면 main 밖의 하단 내비게이션도 뒤 화면이므로 함께 제외한다.
+    const main = wrapper?.closest('main')
+    if (main?.parentElement) {
+      for (const sibling of Array.from(main.parentElement.children)) {
+        if (sibling !== main && sibling instanceof HTMLElement && !sibling.hasAttribute('inert')) {
+          sibling.setAttribute('inert', '')
+          dimmed.push(sibling)
+        }
+      }
+    }
     ref.current?.focus()
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {

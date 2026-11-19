@@ -12,6 +12,7 @@ import {
   withReflection,
   type RecordDetailView,
 } from '../../features/records/recordDetail'
+import { getVisibleRecords } from '../../features/records/recordsView'
 import { findRecord } from '../../features/running/recordQueries'
 import { createRunStorage, type RecordsReadResult } from '../../features/running/runStorage'
 import type { RunRecord, RunReflection } from '../../features/running/types'
@@ -108,12 +109,14 @@ export function RecordDetailPage() {
   const [draft, setDraft] = useState<RunReflection>(EMPTY_DRAFT)
   const [error, setError] = useState<string | null>(null)
   // 저장해 반영한 기록(저장소를 다시 읽지 않고 화면에 바로 보인다)
+  const [now] = useState(() => new Date())
   const [updated, setUpdated] = useState<RunRecord | null>(null)
 
   // 목록·달력에서 왔으면 이전 화면으로, 직접 열었으면 기록 화면으로 돌아간다.
   const goBack = () => (location.key !== 'default' ? navigate(-1) : navigate(RECORDS_PATH, { replace: true }))
 
-  const found = result.ok ? findRecord(result.records, recordId) : null
+  // 목록·달력과 같이 지금보다 늦게 시작한 기록은 직접 주소로 열어도 보이지 않는다.
+  const found = result.ok ? findRecord(getVisibleRecords(result.records, now), recordId) : null
   const record = updated !== null && updated.recordId === found?.recordId ? updated : found
 
   if (!result.ok || record === null) {
@@ -184,9 +187,9 @@ export function RecordDetailPage() {
         subtitle={view.sheetSubtitle}
         error={error}
         onClose={() => setSheetOpen(false)}
-        onDifficulty={(value) => setDraft((current) => setDraftDifficulty(current, value))}
-        onToggleReason={(value) => setDraft((current) => toggleDraftReason(current, value))}
-        onMemo={(value) => setDraft((current) => setDraftMemo(current, value))}
+        onDifficulty={(value) => (setError(null), setDraft((current) => setDraftDifficulty(current, value)))}
+        onToggleReason={(value) => (setError(null), setDraft((current) => toggleDraftReason(current, value)))}
+        onMemo={(value) => (setError(null), setDraft((current) => setDraftMemo(current, value)))}
         onSave={saveReport}
       />
     </div>
