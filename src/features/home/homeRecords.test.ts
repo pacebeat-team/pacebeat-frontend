@@ -1,3 +1,4 @@
+import { buildRecordRows } from '../records/recordsView.ts'
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { totalDistanceM } from '../running/recordQueries.ts'
@@ -104,9 +105,18 @@ describe('지난 러닝 행', () => {
     assert.equal(buildHomeRecordsView([past, future], NOW).lastRunText, '3.00 km · 거리 완주')
     assert.equal(buildHomeRecordsView([future], NOW).lastRunText, null)
   })
+  test('지난 러닝 행은 가장 최근 기록으로 연결되고, 기록 목록의 첫 행과 같은 기록이다', () => {
+    const older = makeRecord({ id: 'older', startedAt: at(15, 8), endedAt: at(15, 9) })
+    const newer = makeRecord({ id: 'newer', startedAt: at(17, 8), endedAt: at(17, 9) })
+    const future = makeRecord({ id: 'future', startedAt: at(21), completion: 'time' })
+    const view = buildHomeRecordsView([older, newer, future], NOW)
+    assert.equal(view.lastRunRecordId, 'newer')
+    assert.equal(buildRecordRows([older, newer, future], NOW, false)[0].recordId, view.lastRunRecordId)
+  })
   test('기록이 없으면 행 문구는 null이고 요일은 비어 있다', () => {
     const view = buildHomeRecordsView([], NOW)
     assert.equal(view.lastRunText, null)
+    assert.equal(view.lastRunRecordId, null)
     assert.deepEqual(trueDays(view.runDays), [])
   })
   test('TIME 기록은 누적 거리에 포함되지 않는다', () => {
