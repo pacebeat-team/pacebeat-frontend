@@ -17,8 +17,12 @@ import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { ProfileEditPage } from '../pages/my/ProfileEditPage'
-import { DeviceInsolesPage } from '../pages/my/DeviceInsolesPage'
 import { GuidanceSettingsPage } from '../pages/my/GuidanceSettingsPage'
+import { AccountPage } from '../pages/my/AccountPage'
+import { DataPage } from '../pages/my/DataPage'
+import { DataExportPage } from '../pages/my/DataExportPage'
+import { DataDeletePage } from '../pages/my/DataDeletePage'
+import { DeviceInsolesPage } from '../pages/my/DeviceInsolesPage'
 import { DeviceHelpPage } from '../pages/my/DeviceHelpPage'
 import { DeviceCalibrationPage } from '../pages/my/DeviceCalibrationPage'
 import { SplashPage } from '../pages/SplashPage'
@@ -125,6 +129,10 @@ export const router = createBrowserRouter([
           { index: true, element: <MyPage /> },
           { path: 'profile', element: <ProfileEditPage /> },
           { path: 'guidance', element: <GuidanceSettingsPage /> },
+          { path: 'account', element: <AccountPage /> },
+          { path: 'data', element: <DataPage /> },
+          { path: 'data/export', element: <DataExportPage /> },
+          { path: 'data/delete', element: <DataDeletePage /> },
           { path: 'device', element: <DeviceInsolesPage /> },
           { path: 'device/help', element: <DeviceHelpPage /> },
           { path: 'device/calibration', element: <DeviceCalibrationPage /> },
