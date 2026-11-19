@@ -142,7 +142,7 @@ export function ReflectionSheet() {
     <div ref={wrapperRef} className="absolute inset-0 z-[60] flex flex-col justify-end">
       <button
         type="button"
-        aria-label="회고 닫기"
+        aria-label="리포트 닫기"
         onClick={() => api.closeSheet()}
         className="absolute inset-0 cursor-default bg-ink/[0.32]"
       />
@@ -150,13 +150,13 @@ export function ReflectionSheet() {
         ref={ref}
         role="dialog"
         aria-modal="true"
-        aria-label="오늘 러닝 회고"
+        aria-label="오늘 러닝 리포트"
         tabIndex={-1}
         className="relative flex max-h-full min-h-[min(724px,100%)] flex-col overflow-y-auto rounded-t-[28px] bg-app-bg p-6 pb-[max(24px,env(safe-area-inset-bottom,0px))] font-pace text-ink outline-none"
       >
         <div className="mx-auto h-1 w-9 shrink-0 rounded-full bg-line" />
-        <h2 className="mt-5 text-[28px] font-medium leading-9">오늘 러닝 회고</h2>
-        <p className="mt-1 text-[14px] leading-5 text-muted">오늘의 러닝 회고</p>
+        <h2 className="mt-5 text-[28px] font-medium leading-9">오늘 러닝 리포트</h2>
+        <p className="mt-1 text-[14px] leading-5 text-muted">오늘의 러닝 리포트</p>
 
         <p className="mt-6 text-[16px] font-medium leading-[22px]">체감 난이도</p>
         <div role="radiogroup" aria-label="체감 난이도" className="mt-3 flex h-[44px] w-full gap-3">

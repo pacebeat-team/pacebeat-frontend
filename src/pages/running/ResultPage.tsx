@@ -125,7 +125,7 @@ export function GoalResult({ summary, arrival = false }: { summary: RunSummary; 
               <img src={reflectionIcon} alt="" aria-hidden="true" className="size-[26px]" />
             </span>
             <span className="flex h-[54px] flex-col gap-[6px]">
-              <span className="text-[18px] font-semibold leading-6">러닝 회고하기</span>
+              <span className="text-[18px] font-semibold leading-6">러닝 리포트 작성하기</span>
               <span className="text-[14px] leading-[19px] text-muted">오늘 러닝은 어떠셨나요?</span>
             </span>
           </button>
