@@ -118,6 +118,31 @@ describe('기록 저장(records)', () => {
     assert.equal(createRunStorage(createMemoryStorage({ [RUN_STORAGE_KEYS.records]: '{깨짐' }).storage).loadRecords().length, 0)
     assert.equal(createRunStorage(createMemoryStorage({ [RUN_STORAGE_KEYS.records]: JSON.stringify({ version: 9, data: [] }) }).storage).loadRecords().length, 0)
   })
+  test('readRecords: 없음·정상·손상·저장소 없음을 구분한다', () => {
+    const key = RUN_STORAGE_KEYS.records
+    assert.deepEqual(createRunStorage(createMemoryStorage().storage).readRecords(), { ok: true, records: [] })
+    assert.deepEqual(createRunStorage(null).readRecords(), { ok: false, reason: 'unavailable' })
+    for (const raw of ['{깨짐', JSON.stringify({ version: 9, data: [] }), JSON.stringify({ version: 1, data: 'x' }), JSON.stringify({ version: 1 })]) {
+      assert.deepEqual(createRunStorage(createMemoryStorage({ [key]: raw }).storage).readRecords(), { ok: false, reason: 'unreadable' })
+    }
+    const throwing = createRunStorage({ getItem: () => { throw new Error('denied') }, setItem: () => {}, removeItem: () => {} })
+    assert.deepEqual(throwing.readRecords(), { ok: false, reason: 'unreadable' })
+    const mixed = createMemoryStorage({ [key]: JSON.stringify({ version: 1, data: [makeRecord('good'), { recordId: 'bad' }] }) })
+    const result = createRunStorage(mixed.storage).readRecords()
+    assert.equal(result.ok && result.records.map((record) => record.recordId).join(), 'good')
+  })
+  test('saveRecord: 읽을 수 없는 기존 항목을 지우지 않고 보존한다', () => {
+    const key = RUN_STORAGE_KEYS.records
+    const bad = { recordId: 'bad', note: '미래 버전 기록' }
+    const memory = createMemoryStorage({ [key]: JSON.stringify({ version: 1, data: [bad, makeRecord('a')] }) })
+    const storage = createRunStorage(memory.storage)
+    storage.saveRecord(makeRecord('b'))
+    storage.saveRecord(makeRecord('a', 'gps', 900_000))
+    const data = (JSON.parse(memory.map.get(key) ?? '') as { data: unknown[] }).data
+    assert.equal(data.length, 3)
+    assert.deepEqual(data[0], bad)
+    assert.deepEqual(storage.loadRecords().map((record) => record.recordId), ['a', 'b'])
+  })
   test('isRunRecord: 센서 리포트가 null이 아니거나 회고 메모가 100자를 넘으면 거부한다', () => {
     const record = makeRecord('a')
     assert.equal(isRunRecord(record), true)

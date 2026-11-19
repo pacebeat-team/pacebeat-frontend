@@ -153,10 +153,17 @@ function getBrowserStorage(): RunKeyValueStorage | null {
   }
 }
 
+// 기록 읽기 결과. 기록이 없는 것(ok + 빈 배열)과 읽을 수 없는 것(오류)을 구분한다.
+// unavailable: 저장소를 쓸 수 없음 / unreadable: 읽기 실패나 저장 데이터 전체가 손상됨
+export type RecordsReadResult =
+  | { readonly ok: true; readonly records: RunRecord[] }
+  | { readonly ok: false; readonly reason: 'unavailable' | 'unreadable' }
+
 export interface RunStorage {
   loadDraft: () => RunDraft
   saveDraft: (draft: RunDraft) => void
   loadRecords: () => RunRecord[]
+  readRecords: () => RecordsReadResult
   getRecord: (recordId: string) => RunRecord | null
   // 같은 recordId는 덮어쓴다(중복 생성 없음).
   saveRecord: (record: RunRecord) => void
@@ -191,6 +198,27 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
     return Array.isArray(data) ? data.filter(isRunRecord) : []
   }
 
+  // 저장된 배열을 그대로(유효하지 않은 항목 포함) 읽는다. 없으면 [], 읽을 수 없거나 배열이 아니면 null.
+  function readRawRecords(): unknown[] | null {
+    if (storage === null) return null
+    try {
+      const raw = storage.getItem(RUN_STORAGE_KEYS.records)
+      if (raw === null) return []
+      const parsed: unknown = JSON.parse(raw)
+      if (!isRecord(parsed) || parsed.version !== STORAGE_VERSION || !Array.isArray(parsed.data)) return null
+      return parsed.data
+    } catch {
+      return null
+    }
+  }
+
+  function readRecords(): RecordsReadResult {
+    if (storage === null) return { ok: false, reason: 'unavailable' }
+    const items = readRawRecords()
+    if (items === null) return { ok: false, reason: 'unreadable' }
+    return { ok: true, records: items.filter(isRunRecord) }
+  }
+
   return {
     loadDraft: () => {
       const data = read(RUN_STORAGE_KEYS.draft)
@@ -217,15 +245,14 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
     saveDraft: (draft) => write(RUN_STORAGE_KEYS.draft, draft),
 
     loadRecords,
+    readRecords,
     getRecord: (recordId) => loadRecords().find((record) => record.recordId === recordId) ?? null,
     saveRecord: (record) => {
-      const saved = loadRecords()
-      const exists = saved.some((item) => item.recordId === record.recordId)
+      // 읽을 수 없는 항목도 그대로 남긴다(다른 기록을 지우지 않는다). 저장 데이터 전체를 읽을 수 없으면 새로 시작한다.
+      const saved = readRawRecords() ?? []
+      const isSame = (item: unknown) => isRunRecord(item) && item.recordId === record.recordId
       // 같은 recordId는 제자리에서 덮어쓴다. 새 기록은 끝에 추가한다.
-      write(
-        RUN_STORAGE_KEYS.records,
-        exists ? saved.map((item) => (item.recordId === record.recordId ? record : item)) : [...saved, record],
-      )
+      write(RUN_STORAGE_KEYS.records, saved.some(isSame) ? saved.map((item) => (isSame(item) ? record : item)) : [...saved, record])
     },
   }
 }
