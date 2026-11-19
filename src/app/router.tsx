@@ -18,6 +18,7 @@ import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { ProfileEditPage } from '../pages/my/ProfileEditPage'
 import { DeviceInsolesPage } from '../pages/my/DeviceInsolesPage'
+import { GuidanceSettingsPage } from '../pages/my/GuidanceSettingsPage'
 import { DeviceHelpPage } from '../pages/my/DeviceHelpPage'
 import { DeviceCalibrationPage } from '../pages/my/DeviceCalibrationPage'
 import { SplashPage } from '../pages/SplashPage'
@@ -123,6 +124,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <MyPage /> },
           { path: 'profile', element: <ProfileEditPage /> },
+          { path: 'guidance', element: <GuidanceSettingsPage /> },
           { path: 'device', element: <DeviceInsolesPage /> },
           { path: 'device/help', element: <DeviceHelpPage /> },
           { path: 'device/calibration', element: <DeviceCalibrationPage /> },
