@@ -58,7 +58,7 @@ export function ConsentScreen() {
   }
 
   return (
-    <div className="flex flex-col px-[24px] pb-[24px] pt-[12px]">
+    <div className="flex flex-col px-[24px] pt-[12px]">
       <ProfileHeader title="가입하기" onBack={handleBack} />
 
       <h2 className="mt-[16px] text-[34px] font-light leading-[44px] tracking-[-1.02px] text-[#111111]">
@@ -88,10 +88,11 @@ export function ConsentScreen() {
             />
           ))}
         </div>
+      </div>
 
-        <div className="mt-[20px]">
-          <ProfileCta label="동의하고 계속하기" disabled={!continuable} onClick={handleSubmit} />
-        </div>
+      {/* 화면이 낮아 내용이 넘치면 스크롤 영역 아래에 붙어 CTA가 항상 보인다. 내용이 들어가는 높이에서는 목록 바로 아래(Figma 위치)에 놓인다. */}
+      <div className="sticky bottom-0 -mx-[24px] bg-[#fefefe] px-[24px] pb-[24px] pt-[20px]">
+        <ProfileCta label="동의하고 계속하기" disabled={!continuable} onClick={handleSubmit} />
         <p className="mt-[12px] text-[13px] font-normal leading-[18px] text-[#626174]" aria-live="polite">
           {getRequirementMessage(draft)}
         </p>
