@@ -85,15 +85,27 @@ describe('메인 탭 (/home, /running, /records, /growth, /my)', () => {
   })
 })
 
-describe('러닝 탭 하위 경로 (/running/...)', () => {
-  test('러닝 탭과 같은 정책을 받는다', () => {
-    for (const path of ['/running/time', '/running/music/abc', '/running/result/', '/RUNNING/ready']) {
-      assert.equal(getProtectedRoute(path), '/running', path)
+describe('메인 탭 하위 경로 (/running/..., /my/..., /growth/...)', () => {
+  test('그 탭과 같은 정책을 받는다', () => {
+    const cases: [string, string][] = [
+      ['/running/time', '/running'],
+      ['/running/music/abc', '/running'],
+      ['/running/result/', '/running'],
+      ['/RUNNING/ready', '/running'],
+      ['/my/profile', '/my'],
+      ['/my/device/help', '/my'],
+      ['/growth/posture', '/growth'],
+    ]
+    for (const [path, tab] of cases) {
+      assert.equal(getProtectedRoute(path), tab, path)
       assert.equal(redirect(path), '/measurement/guide', path)
       assert.equal(redirect(path, { baselineMeasurementCompleted: true }), null, path)
       assert.equal(redirect(path, { onboardingCompleted: false }), '/onboarding/intro', path)
     }
-    assert.equal(getProtectedRoute('/runningx'), null)
+  })
+
+  test('이름만 비슷한 경로는 보호 대상이 아니다', () => {
+    for (const path of ['/runningx', '/myx/profile', '/growthy', '/homes/x']) assert.equal(getProtectedRoute(path), null, path)
   })
 })
 

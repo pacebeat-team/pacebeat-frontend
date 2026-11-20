@@ -8,7 +8,7 @@ import { getEntryPath } from './entryPath.ts'
 //   2) 프로필 미완료 → 프로필 이어하기 경로
 //   3) 위를 통과한 뒤 경로별 정책
 // 경로별 정책
-//   - 메인 탭(/home, /running, /running/..., /records, /growth, /my): 기초 측정을 완료했거나 이번 실행에서 Guide를 건너뛰었거나 뒤로 가기로 나왔을 때만 연다. 아니면 Guide.
+//   - 메인 탭(/home, /running, /records, /growth, /my)과 그 하위 경로(/running/..., /my/..., /growth/... 등): 기초 측정을 완료했거나 이번 실행에서 Guide를 건너뛰었거나 뒤로 가기로 나왔을 때만 연다. 아니면 Guide.
 //   - /measurement/guide, /measurement/active: 1)2)만 확인한다. (기초 측정 진행 중에는 완료 상태가 false인 것이 정상이다.)
 //   - /measurement/result: 종료된 측정 세션이 있어야 연다. 없으면 기초 측정 완료 시 Home, 아니면 Guide.
 // 이번 실행의 Guide 종료 기록은 메인 탭 접근만 허용한다. 기초 측정 완료로 취급하지 않는다. (결과 화면의 이동에서도 완료로 보지 않는다.)
@@ -32,6 +32,8 @@ export interface RouteAccessState {
 }
 
 export const MAIN_TAB_PATHS = ['/home', '/running', '/records', '/growth', '/my'] as const
+// 하위 화면을 가질 수 있는 메인 탭
+const SUBROUTE_TAB_PATHS = ['/running', '/records', '/growth', '/my'] as const
 export const MEASUREMENT_PATHS = ['/measurement/guide', '/measurement/active', '/measurement/result'] as const
 
 const GUIDE_PATH = '/measurement/guide'
@@ -54,8 +56,10 @@ function normalizePathname(pathname: string): string {
 // 이 정책이 보호하는 경로이면 정규화한 경로를, 아니면 null을 돌려준다.
 export function getProtectedRoute(pathname: string): ProtectedRoute | null {
   const path = normalizePathname(pathname)
-  // 러닝 탭은 하위 화면(/running/time 등)이 있다. 직접 주소로 열어도 러닝 탭과 같은 접근 정책을 받는다.
-  if (path.startsWith('/running/')) return '/running'
+  // 메인 탭은 하위 화면(/running/time, /my/device, /growth/posture 등)이 있다. 직접 주소로 열어도 그 탭과 같은 접근 정책을 받는다.
+  // /home에는 하위 화면이 없다. 알 수 없는 /home/... 주소는 라우터가 /home으로 보내 그곳에서 판단한다.
+  const tab = SUBROUTE_TAB_PATHS.find((tabPath) => path.startsWith(`${tabPath}/`))
+  if (tab !== undefined) return tab
   const all: readonly string[] = [...MAIN_TAB_PATHS, ...MEASUREMENT_PATHS]
   return all.includes(path) ? (path as ProtectedRoute) : null
 }
