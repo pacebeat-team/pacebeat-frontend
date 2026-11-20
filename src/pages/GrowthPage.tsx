@@ -7,24 +7,12 @@ import {
   buildWeeklyGrowth,
   getGrowthState,
 } from '../features/growth/growthView'
+import { readGrowthRecordsFromBrowser, type GrowthRecordsResult } from '../features/growth/growthRecords'
 import { RUN_PATHS } from '../features/running/runFlow'
-import { createRunStorage } from '../features/running/runStorage'
 import type { RunRecord } from '../features/running/types'
 import { BarChart, LinkRow, Metric, StateCard } from './growth/GrowthParts'
 
 type Period = 'month' | 'week'
-
-// 저장소를 읽지 못하면(접근 불가 등) 기록 없음과 구분해 다시 시도 화면을 보여 준다.
-// 저장된 값이 형식에 맞지 않으면 그 기록은 건너뛴다(loadRecords).
-type RecordsReadResult = { ok: true; records: RunRecord[] } | { ok: false }
-
-function readRecords(): RecordsReadResult {
-  try {
-    return { ok: true, records: createRunStorage().loadRecords() }
-  } catch {
-    return { ok: false }
-  }
-}
 
 function PaceBlock({ records, now }: { records: readonly RunRecord[]; now: Date }) {
   const pace = buildPaceCompare(records, now)
@@ -96,7 +84,7 @@ function FirstRecord({ records, now }: { records: readonly RunRecord[]; now: Dat
 // Figma `GROWTH`(07). 저장된 러닝 기록으로 월간·주간 성장을 보여 준다. 연속 기록은 만들지 않는다.
 export function GrowthPage() {
   const [now, setNow] = useState(() => new Date())
-  const [result, setResult] = useState(readRecords)
+  const [result, setResult] = useState<GrowthRecordsResult>(readGrowthRecordsFromBrowser)
   const [period, setPeriod] = useState<Period>('month')
 
   let body
@@ -104,10 +92,10 @@ export function GrowthPage() {
     body = (
       <section className="flex flex-col gap-3 rounded-[24px] bg-soft p-6">
         <h2 className="text-[20px] font-semibold leading-7">기록을 불러오지 못했어요</h2>
-        <p className="text-[14px] leading-5 text-muted">잠시 후 다시 시도해 주세요.</p>
+        <p className="text-[14px] leading-5 text-muted">저장된 기록을 읽지 못했어요. 저장된 원본은 지우지 않고 그대로 두었어요. 잠시 후 다시 시도해 주세요.</p>
         <button
           type="button"
-          onClick={() => (setNow(new Date()), setResult(readRecords()))}
+          onClick={() => (setNow(new Date()), setResult(readGrowthRecordsFromBrowser()))}
           className="mt-3 h-12 cursor-pointer rounded-full bg-ink text-[16px] font-medium text-app-bg"
         >
           다시 시도
@@ -207,6 +195,11 @@ export function GrowthPage() {
         <h1 className="mt-4 w-full text-[34px] font-light leading-[44px] tracking-[-1.44px]">성장</h1>
       </header>
       <div className="mt-4">{body}</div>
+      {result.ok && result.skipped > 0 && (
+        <p role="status" className="mt-5 text-[13px] leading-[18px] text-muted">
+          저장된 기록 중 {result.skipped}개를 읽지 못해 제외했어요. 저장된 원본은 그대로 남아 있어요.
+        </p>
+      )}
     </div>
   )
 }
