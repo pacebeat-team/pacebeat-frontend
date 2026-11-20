@@ -15,6 +15,7 @@ import { ResultDetailsPage } from '../pages/running/ResultDetailsPage'
 import { ArrivalPage } from '../pages/running/ArrivalPage'
 import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
+import { PosturePage } from '../pages/growth/PosturePage'
 import { MyPage } from '../pages/MyPage'
 import { SplashPage } from '../pages/SplashPage'
 import { IntroPage } from '../pages/onboarding/IntroPage'
@@ -112,7 +113,10 @@ export const router = createBrowserRouter([
       },
       {
         path: 'growth',
-        element: <GrowthPage />,
+        children: [
+          { index: true, element: <GrowthPage /> },
+          { path: 'posture', element: <PosturePage /> },
+        ],
       },
       {
         path: 'my',
