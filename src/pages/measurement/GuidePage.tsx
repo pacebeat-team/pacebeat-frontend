@@ -1,5 +1,6 @@
-import { useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect } from 'react'
+import { useBlocker, useNavigate } from 'react-router-dom'
+import { shouldRecordGuideExit } from '../../app/guidePopExit'
 import mascot from '../../assets/images/mascot-p.png'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { ScreenHeader } from '../../components/common/ScreenHeader'
@@ -7,14 +8,35 @@ import { TextButton } from '../../components/common/TextButton'
 import { formatClock, formatWholeMinutes } from '../../features/measurementView/format'
 import { useMeasurementView } from '../../features/measurementView/useMeasurementView'
 
-export function GuidePage() {
+export interface GuidePageProps {
+  // "건너뛰기"를 눌렀을 때 이동하기 전에 부른다. 기초 측정 완료 상태는 바꾸지 않는다. (router가 앱 상태 기록을 넘긴다.)
+  onSkip: () => void
+  // 헤더의 뒤로 가기를 눌렀을 때 이동하기 전에 부른다. 기초 측정 완료 상태와 건너뛰기 기록은 바꾸지 않는다.
+  onBack: () => void
+}
+
+export function GuidePage({ onSkip, onBack }: GuidePageProps) {
   const navigate = useNavigate()
   const { view, actions, isVirtual } = useMeasurementView()
   const minutes = formatWholeMinutes(view.guide.targetDurationSec)
 
+  // 브라우저 뒤로 가기와 Android 하드웨어 뒤로 가기(기록 이동)도 헤더 뒤로 가기와 같은 종료 기록을 남긴다.
+  // 라우터가 화면을 바꾸고 프로필 가드가 리다이렉트하기 전에 잡아야 하므로 blocker를 쓴다. 기록만 남기고 이동은 그대로 진행한다.
+  // (진행하면 이전 프로필 기록으로 들어가고, 가드가 종료 기록을 보고 Home으로 보낸다. 여기서 직접 navigate하지 않으므로 순환이 없다.)
+  const blocker = useBlocker(shouldRecordGuideExit)
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    onBack()
+    blocker.proceed()
+  }, [blocker, onBack])
+
   const handleBack = useCallback(() => {
-    navigate(-1)
-  }, [navigate])
+    // 프로필을 마치고 온 직후에는 이전 기록이 완료된 프로필 화면이라 navigate(-1)로는 돌아갈 수 없다. 홈으로 보낸다.
+    // Guide를 기록에서 교체한다. 기초 측정 완료 상태와 건너뛰기 기록은 바꾸지 않으므로 다음 앱 실행에서는 Guide가 다시 나온다.
+    // onBack은 이번 실행의 "Guide에서 나옴"만 기억해, Home에서 브라우저 뒤로 가기를 눌러도 Guide로 되돌아오지 않게 한다.
+    onBack()
+    navigate('/home', { replace: true })
+  }, [navigate, onBack])
 
   const handleStart = useCallback(() => {
     actions.start()
@@ -23,8 +45,10 @@ export function GuidePage() {
 
   const handleSkip = useCallback(() => {
     // TODO: Figma는 HOME / Arrival로 이동한다. 해당 화면이 없어 /home으로 이동한다. (목적지 기획 확인 필요)
-    navigate('/home')
-  }, [navigate])
+    // Guide를 기록에서 교체한다. 홈에서 뒤로 가기를 눌러도 Guide로 돌아오지 않는다.
+    onSkip()
+    navigate('/home', { replace: true })
+  }, [navigate, onSkip])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace">

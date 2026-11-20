@@ -9,12 +9,16 @@ import { TextButton } from '../../components/common/TextButton'
 import { PermissionItem } from '../../components/onboarding/PermissionItem'
 import { StepIndicator } from '../../components/onboarding/StepIndicator'
 import { checkMotionFitnessSupport, requestLocationPermission } from '../../lib/permissions'
+import { recordPermissionStep, skipPermissionStep } from '../../lib/onboardingFlow'
 import { useOnboardingStore } from '../../stores/onboardingStore'
 
-// 권한 안내를 마치면(허용, 거부, 나중에 모두) 기초 측정 Guide로 이동한다.
-const NEXT_PATH = '/measurement/guide'
+export interface PermissionsPageProps {
+  // 권한 안내를 마친 뒤 이동할 경로. 온보딩 완료를 기록한 다음에 부른다. (router가 앱 상태에 맞는 경로를 넘긴다.)
+  resolveNextPath: () => string
+}
 
-export function PermissionsPage() {
+// 권한 안내를 마치면(허용, 거부, 나중에 모두) 온보딩 완료를 기록하고 resolveNextPath가 알려주는 화면으로 이동한다.
+export function PermissionsPage({ resolveNextPath }: PermissionsPageProps) {
   const navigate = useNavigate()
   const [isRequesting, setIsRequesting] = useState(false)
   const setLocationPermission = useOnboardingStore((state) => state.setLocationPermission)
@@ -48,21 +52,23 @@ export function PermissionsPage() {
     // 대기 중에 사용자가 건너뛰거나 뒤로 이동했다면 저장과 이동을 하지 않는다.
     if (!isActiveRef.current) return
 
-    // 판단 불가(null)는 기존에 저장된 허용/거부 값을 덮어쓰지 않는다.
-    if (locationPermission !== null) setLocationPermission(locationPermission)
-    setMotionFitnessSupport(checkMotionFitnessSupport())
-    completeOnboarding()
+    // 판단 불가(null)는 기존에 저장된 허용/거부 값을 덮어쓰지 않는다. (규칙은 lib/onboardingFlow.ts)
+    recordPermissionStep(
+      { setLocationPermission, setMotionFitnessSupport, completeOnboarding },
+      locationPermission,
+      checkMotionFitnessSupport(),
+    )
 
-    navigate(NEXT_PATH, { replace: true })
-  }, [completeOnboarding, isRequesting, navigate, setLocationPermission, setMotionFitnessSupport])
+    navigate(resolveNextPath(), { replace: true })
+  }, [completeOnboarding, isRequesting, navigate, resolveNextPath, setLocationPermission, setMotionFitnessSupport])
 
   const handleSkip = useCallback(() => {
     // "나중에 할게요": 권한을 요청하지 않으므로 저장값은 null로 유지
     // 이미 진행 중인 권한 요청은 취소할 수 없지만, 이후 도착하는 응답은 무시한다.
     isActiveRef.current = false
-    completeOnboarding()
-    navigate(NEXT_PATH, { replace: true })
-  }, [completeOnboarding, navigate])
+    skipPermissionStep({ completeOnboarding })
+    navigate(resolveNextPath(), { replace: true })
+  }, [completeOnboarding, navigate, resolveNextPath])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace">

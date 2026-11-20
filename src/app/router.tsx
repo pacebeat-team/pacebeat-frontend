@@ -17,6 +17,9 @@ import { RecordsPage } from '../pages/RecordsPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { SplashPage } from '../pages/SplashPage'
+import { EntryGuard } from './EntryGuard'
+import { resolveEntryPath, resolvePostProfilePath } from './entryFlow'
+import { guideBackSession, guideSkipSession } from './guideSkip'
 import { IntroPage } from '../pages/onboarding/IntroPage'
 import { ExperiencePage } from '../pages/onboarding/ExperiencePage'
 import { PermissionsPage } from '../pages/onboarding/PermissionsPage'
@@ -45,26 +48,22 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="/onboarding/intro" replace /> },
           { path: 'intro', element: <IntroPage /> },
           { path: 'experience', element: <ExperiencePage /> },
-          { path: 'permissions', element: <PermissionsPage /> },
+          { path: 'permissions', element: <PermissionsPage resolveNextPath={resolveEntryPath} /> },
         ],
       },
       {
+        // /measurement 인덱스는 Guide로 보낸다. 이동한 /measurement/guide에서 가드가 판단한다.
         path: 'measurement',
-        children: [
-          { index: true, element: <Navigate to="/measurement/guide" replace /> },
-          { path: 'guide', element: <GuidePage /> },
-          { path: 'active', element: <ActivePage /> },
-          { path: 'result', element: <ResultPage /> },
-        ],
+        children: [{ index: true, element: <Navigate to="/measurement/guide" replace /> }],
       },
       {
         // /profile은 지금 상태에 맞는 단계로 보낸다. (가입 전이면 동의 화면)
         path: 'profile',
-        element: <ProfileEntryRedirect />,
+        element: <ProfileEntryRedirect resolveNextPath={resolvePostProfilePath} />,
       },
       {
         // 프로필 단계 화면은 가드 아래에 둔다. 지금 열 수 없는 단계는 먼저 마쳐야 할 단계로 보낸다.
-        element: <ProfileStepGuard />,
+        element: <ProfileStepGuard resolveNextPath={resolvePostProfilePath} />,
         children: [
           {
             path: PROFILE_ROUTES.consent,
@@ -80,43 +79,46 @@ export const router = createBrowserRouter([
           },
           {
             path: PROFILE_ROUTES.body,
-            element: <BodyScreen />,
+            element: <BodyScreen resolveNextPath={resolvePostProfilePath} />,
           },
         ],
       },
       {
-        path: 'home',
-        element: <HomePage />,
-      },
-      {
-        path: 'running',
-        element: <RunFlowGuard />,
+        // 메인 탭과 측정 화면은 직접 주소 입력과 새로고침에도 지금 진행 상태에 맞을 때만 연다. (접근 정책은 lib/routeAccess.ts)
+        // 프로필 단계(/profile/...)는 ProfileStepGuard, 온보딩(/onboarding/...)과 Splash는 가드가 없다. 알 수 없는 주소(*)는 아래에서 /home으로 가며 이 가드를 거친다.
+        element: <EntryGuard />,
         children: [
-          { index: true, element: <GoalPage /> },
-          { path: 'time', element: <TimePickerPage /> },
-          { path: 'music', element: <MusicPage /> },
-          { path: 'music/:trackId', element: <MusicPreviewPage /> },
-          { path: 'ready', element: <ReadyPage /> },
-          { path: 'countdown', element: <CountdownPage /> },
-          { path: 'active', element: <RunActivePage /> },
-          { path: 'end', element: <EndConfirmPage /> },
-          { path: 'arrival', element: <ArrivalPage /> },
-          { path: 'result', element: <RunResultPage /> },
-          { path: 'result/details', element: <ResultDetailsPage /> },
-          { path: '*', element: <Navigate to="/running" replace /> },
+          {
+            path: 'measurement',
+            children: [
+              { path: 'guide', element: <GuidePage onSkip={guideSkipSession.markSkipped} onBack={guideBackSession.markLeft} /> },
+              { path: 'active', element: <ActivePage /> },
+              { path: 'result', element: <ResultPage /> },
+            ],
+          },
+          { path: 'home', element: <HomePage /> },
+          {
+            path: 'running',
+            element: <RunFlowGuard />,
+            children: [
+              { index: true, element: <GoalPage /> },
+              { path: 'time', element: <TimePickerPage /> },
+              { path: 'music', element: <MusicPage /> },
+              { path: 'music/:trackId', element: <MusicPreviewPage /> },
+              { path: 'ready', element: <ReadyPage /> },
+              { path: 'countdown', element: <CountdownPage /> },
+              { path: 'active', element: <RunActivePage /> },
+              { path: 'end', element: <EndConfirmPage /> },
+              { path: 'arrival', element: <ArrivalPage /> },
+              { path: 'result', element: <RunResultPage /> },
+              { path: 'result/details', element: <ResultDetailsPage /> },
+              { path: '*', element: <Navigate to="/running" replace /> },
+            ],
+          },
+          { path: 'records', element: <RecordsPage /> },
+          { path: 'growth', element: <GrowthPage /> },
+          { path: 'my', element: <MyPage /> },
         ],
-      },
-      {
-        path: 'records',
-        element: <RecordsPage />,
-      },
-      {
-        path: 'growth',
-        element: <GrowthPage />,
-      },
-      {
-        path: 'my',
-        element: <MyPage />,
       },
       {
         path: '*',
