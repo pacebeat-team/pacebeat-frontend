@@ -85,6 +85,18 @@ describe('메인 탭 (/home, /running, /records, /growth, /my)', () => {
   })
 })
 
+describe('러닝 탭 하위 경로 (/running/...)', () => {
+  test('러닝 탭과 같은 정책을 받는다', () => {
+    for (const path of ['/running/time', '/running/music/abc', '/running/result/', '/RUNNING/ready']) {
+      assert.equal(getProtectedRoute(path), '/running', path)
+      assert.equal(redirect(path), '/measurement/guide', path)
+      assert.equal(redirect(path, { baselineMeasurementCompleted: true }), null, path)
+      assert.equal(redirect(path, { onboardingCompleted: false }), '/onboarding/intro', path)
+    }
+    assert.equal(getProtectedRoute('/runningx'), null)
+  })
+})
+
 describe('/measurement/guide, /measurement/active', () => {
   test('선행 단계를 마쳤으면 기초 측정 상태와 기록에 관계없이 연다 (기초 측정 진행 중과 재측정)', () => {
     for (const path of ['/measurement/guide', '/measurement/active']) {
