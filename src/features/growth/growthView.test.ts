@@ -13,6 +13,7 @@ import {
   buildFirstRecord,
   buildPaceCompare,
   getGrowthState,
+  isPaceUnchanged,
 } from './growthView.ts'
 
 const NOW = new Date(2026, 9, 22, 12) // 2026-10-22(목). 10월 1일은 목요일 → 1주=1~4일, 2주=5~11, 3주=12~18, 4주=19~25
@@ -202,4 +203,21 @@ test('helper: getVisibleRecords는 기록 화면과 같이 지금보다 늦게 �
   assert.deepEqual(getVisibleRecords(records, NOW), referenceVisible(records, NOW))
   assert.equal(getVisibleRecords(records, NOW).length, 2)
   assert.deepEqual(getVisibleRecords([], NOW), [])
+})
+
+test('같은 페이스: 표시 값이 같으면 변화 없음, 다르거나 비교 대상이 없으면 아니다', () => {
+  const same = buildPaceCompare([rec(at(10, 1), { pace: 400 }), rec(at(10, 2), { pace: 400 })], NOW)
+  assert.ok(same)
+  assert.equal(same.savedText, null)
+  assert.equal(isPaceUnchanged(same), true)
+  // 소수 페이스도 표시 초가 같으면 같다 (400.2 → 6:40, 399.8 → 6:40)
+  const rounded = buildPaceCompare([rec(at(10, 1), { pace: 400.2 }), rec(at(10, 2), { pace: 399.8 })], NOW)
+  assert.ok(rounded)
+  assert.equal(isPaceUnchanged(rounded), true)
+  const slower = buildPaceCompare([rec(at(10, 1), { pace: 400 }), rec(at(10, 2), { pace: 410 })], NOW)
+  assert.ok(slower)
+  assert.equal(isPaceUnchanged(slower), false)
+  const single = buildPaceCompare([rec(at(10, 1), { pace: 400 })], NOW)
+  assert.ok(single)
+  assert.equal(isPaceUnchanged(single), false)
 })

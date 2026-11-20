@@ -6,6 +6,7 @@ import {
   buildPaceCompare,
   buildWeeklyGrowth,
   getGrowthState,
+  isPaceUnchanged,
 } from '../features/growth/growthView'
 import { readGrowthRecordsFromBrowser, type GrowthRecordsResult } from '../features/growth/growthRecords'
 import { RUN_PATHS } from '../features/running/runFlow'
@@ -23,13 +24,14 @@ function PaceBlock({ records, now }: { records: readonly RunRecord[]; now: Date 
       <section aria-label="최근 3 km 완주 페이스" className="mt-5 flex flex-col gap-1">
         <h2 className="text-[13px] leading-[18px] text-muted">최근 3 km 완주 페이스</h2>
         <p className="flex items-baseline gap-2 whitespace-nowrap text-[28px] font-light leading-8">
-          {pace.previousText !== null && <span>{pace.previousText} →</span>}
+          {pace.previousText !== null && !isPaceUnchanged(pace) && <span>{pace.previousText} →</span>}
           <span>{pace.latestText}</span>
           <span className="text-[13px] leading-[18px]">/km</span>
         </p>
         {pace.previousText !== null && pace.savedText !== null && (
           <p className="text-[13px] leading-[18px] text-muted">이전 → 최근 3 km 완주 · {pace.savedText}</p>
         )}
+        {isPaceUnchanged(pace) && <p className="text-[13px] leading-[18px] text-muted">이전 3 km 완주와 같은 페이스예요</p>}
       </section>
     </>
   )

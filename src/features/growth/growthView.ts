@@ -206,6 +206,11 @@ export function buildPaceCompare(records: readonly RunRecord[], now: Date): Pace
   }
 }
 
+// 이전과 최근이 화면에 보이는 값(분:초)으로 같은가. 같으면 변화가 있는 것처럼 "→"로 잇지 않는다.
+export function isPaceUnchanged(pace: PaceCompare): boolean {
+  return pace.previousText !== null && pace.previousText === pace.latestText
+}
+
 export interface FirstRecordView {
   // 거리가 없는 기록(TIME)이면 null
   readonly distanceText: string | null
