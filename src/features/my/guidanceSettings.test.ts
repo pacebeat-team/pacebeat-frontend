@@ -7,6 +7,7 @@ import {
   parseGuidanceSettings,
   saveGuidanceSettings,
   serializeGuidanceSettings,
+  summarizeGuidance,
 } from './guidanceSettings.ts'
 import { createGuidanceSettingsStore } from './guidanceSettingsStore.ts'
 
@@ -71,4 +72,11 @@ test('store: 바꾼 값이 저장되고 새 store가 같은 값으로 시작하�
   assert.equal(again.getState().autoPause, true)
   assert.equal(mem.data.get('pacebeat:run:records:v1'), 'KEEP')
   assert.deepEqual([...mem.data.keys()].sort(), [GUIDANCE_STORAGE_KEY, 'pacebeat:run:records:v1'].sort())
+})
+
+test('summarizeGuidance: 켜 둔 안내만 요약하고 모두 꺼지면 꺼짐', () => {
+  assert.equal(summarizeGuidance({ beatGuide: true, voiceGuide: true }), '음악 · 음성')
+  assert.equal(summarizeGuidance({ beatGuide: true, voiceGuide: false }), '음악')
+  assert.equal(summarizeGuidance({ beatGuide: false, voiceGuide: true }), '음성')
+  assert.equal(summarizeGuidance({ beatGuide: false, voiceGuide: false }), '꺼짐')
 })

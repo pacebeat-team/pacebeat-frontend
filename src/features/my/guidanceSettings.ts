@@ -88,3 +88,9 @@ export const FREQUENCY_LABEL: Record<GuidanceFrequency, string> = {
   offPace: '벗어날 때만',
   both: '둘 다',
 }
+
+// 마이 메인 "안내 설정" 행의 요약. 켜 둔 안내만 보여 주고, 모두 꺼져 있으면 "꺼짐"이다.
+export function summarizeGuidance(settings: Pick<GuidanceSettings, 'beatGuide' | 'voiceGuide'>): string {
+  const parts = [...(settings.beatGuide ? ['음악'] : []), ...(settings.voiceGuide ? ['음성'] : [])]
+  return parts.length === 0 ? '꺼짐' : parts.join(' · ')
+}

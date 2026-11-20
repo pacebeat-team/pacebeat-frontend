@@ -4,6 +4,8 @@ import profileChevron from '../assets/my/profile-chevron.svg'
 import profileLanes from '../assets/my/profile-lanes.svg'
 import avatarImage from '../assets/home/avatar.png'
 import chevronRight from '../assets/icons/chevron-right.svg'
+import { summarizeGuidance } from '../features/my/guidanceSettings'
+import { useGuidanceSettings } from '../features/my/guidanceSettingsStore'
 import { buildBaselineView, buildProfileLine } from '../features/my/myView'
 import { MEASUREMENT_GUIDE_PATH, MY_ROUTES } from '../features/my/routes'
 import { profileStore } from '../features/profile/profileStore'
@@ -33,6 +35,8 @@ export function MyPage() {
   const session = useMeasurementStore((state) => state.session)
   const runSource = useMeasurementStore((state) => state.runSource)
   const metrics = useMeasurementStore((state) => state.metrics)
+  const beatGuide = useGuidanceSettings((state) => state.beatGuide)
+  const voiceGuide = useGuidanceSettings((state) => state.voiceGuide)
 
   const profileLine = buildProfileLine(experienceLevel, weeklyRuns)
   const baseline = buildBaselineView({ session, runSource, metrics })
@@ -84,7 +88,7 @@ export function MyPage() {
         )}
         <MenuRow to={MEASUREMENT_GUIDE_PATH} label="기초 측정" value={baseline === null ? undefined : '다시 측정'} />
         <Divider />
-        <MenuRow to={MY_ROUTES.guidance} label="안내 설정" value="음악 · 음성" />
+        <MenuRow to={MY_ROUTES.guidance} label="안내 설정" value={summarizeGuidance({ beatGuide, voiceGuide })} />
         <Divider />
         <MenuRow to={MY_ROUTES.device} label="스마트 인솔" />
         <Divider />
