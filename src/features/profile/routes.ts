@@ -6,8 +6,9 @@ export const PROFILE_ROUTES = {
   body: '/profile/body',
 } as const
 
-// 프로필 입력을 마친 뒤(키·몸무게 화면의 "시작하기", "건너뛰기") 이동하는 임시 경로.
-// TODO(Issue D): 온보딩 완료 처리와 최종 목적지가 정해지면 이 상수를 교체한다. 지금은 최종 목적지가 아니다.
+// 프로필 가입을 마친 뒤 이동할 곳을 라우터가 알려 주지 않았을 때만 쓰는 기본 경로.
+// 앱에서는 router.tsx가 app/entryFlow.ts의 resolvePostProfilePath를 가드·/profile 진입·키·몸무게 화면에 넘기므로 실제로는 쓰이지 않는다.
+// (프로필 화면을 라우터 없이 따로 쓸 때의 기본값으로만 남겨 둔다.)
 export const PROFILE_COMPLETE_PATH = '/home'
 
 // 프로필 가입을 마친 뒤 갈 경로를 돌려준다. 가드, /profile 진입, 키·몸무게 화면이 모두 이 함수를 기본값으로 쓴다.
