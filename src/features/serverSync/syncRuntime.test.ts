@@ -33,13 +33,14 @@ function setup(opts: { signedIn?: boolean; apiOn?: boolean; create?: (b: RunCrea
   const sent: RunCreateRequest[] = []
   const profile: unknown[] = []
   const baseline: unknown[] = []
+  const guidance: unknown[] = []
   const api: SyncApi = {
     runs: { create: async (b) => { sent.push(b); return opts.create ? opts.create(b) : {} } },
-    users: { updateMe: async (b) => void profile.push(b), putBaseline: async (b) => void baseline.push(b) },
+    users: { updateMe: async (b) => void profile.push(b), putBaseline: async (b) => void baseline.push(b), updateGuidance: async (b) => void guidance.push(b) },
   }
   const state = { signedIn: opts.signedIn ?? true }
   const rt = createSyncRuntime({ getApi: () => (opts.apiOn === false ? null : api), isSignedIn: () => state.signedIn, queueStorage: storage })
-  return { rt, storage, sent, profile, baseline, state }
+  return { rt, storage, sent, profile, baseline, guidance, state }
 }
 
 describe('서버 동기화 연결', () => {
@@ -96,5 +97,13 @@ describe('서버 동기화 연결', () => {
     await s.rt.syncProfile(local)
     assert.equal(s.profile.length, 1)
     assert.equal((s.profile[0] as { height_cm: unknown }).height_cm, null)
+  })
+  test('음성 안내만 보내고(다른 설정은 보내지 않음) 게스트면 보내지 않는다', async () => {
+    const s = setup({ signedIn: false })
+    await s.rt.syncVoiceGuidance({ voiceGuide: false })
+    assert.equal(s.guidance.length, 0)
+    s.state.signedIn = true
+    await s.rt.syncVoiceGuidance({ voiceGuide: false })
+    assert.deepEqual(s.guidance, [{ voice_guidance_enabled: false }])
   })
 })

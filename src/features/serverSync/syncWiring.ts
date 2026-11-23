@@ -3,6 +3,7 @@ import { auth } from '../../lib/auth/index.ts'
 import { getMetrics } from '../measurement/metrics.ts'
 import { measurementStore } from '../../stores/measurementStore.ts'
 import { useOnboardingStore } from '../../stores/onboardingStore.ts'
+import { guidanceSettingsStore } from '../my/guidanceSettingsStore.ts'
 import { profileStore } from '../profile/profileStore.ts'
 import { runResultStore } from '../running/runResultStore.ts'
 import { createRunStorage } from '../running/runStorage.ts'
@@ -67,6 +68,15 @@ stops.push(
       if (session !== null) void syncRuntime.syncBaseline(baselineRequestFromMetrics(getMetrics(metrics, session, now), session.endedAt))
     }
     wasBaselineDone = state.baselineMeasurementCompleted
+  }),
+)
+
+// 안내 설정: 음성 안내가 바뀔 때만 보낸다(다른 안내 설정은 서버 필드가 없어 보내지 않는다).
+let lastVoice = guidanceSettingsStore.getState().voiceGuide
+stops.push(
+  guidanceSettingsStore.subscribe((state) => {
+    if (state.voiceGuide !== lastVoice) void syncRuntime.syncVoiceGuidance({ voiceGuide: state.voiceGuide })
+    lastVoice = state.voiceGuide
   }),
 )
 

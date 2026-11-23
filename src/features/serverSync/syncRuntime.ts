@@ -4,7 +4,8 @@ import type { QueueStorage, RunCreator, RunSyncQueue } from './runSyncQueue.ts'
 import { baselineRequestFromMetrics } from './baselineMapper.ts'
 import { toProfileUpdateRequest } from './profileMapper.ts'
 import type { LocalProfileSnapshot } from './profileMapper.ts'
-import type { BaselineUpsertRequest, UserProfileUpdateRequest } from '../../lib/api/types.ts'
+import { toGuidancePayload } from './guidanceMapper.ts'
+import type { BaselineUpsertRequest, GuidanceSettingsPayload, UserProfileUpdateRequest } from '../../lib/api/types.ts'
 import type { RunRecord } from '../running/types.ts'
 
 // 화면 코드를 바꾸지 않고 기존 Store를 구독해 서버로 보내는 연결(주입형이라 테스트 가능).
@@ -15,6 +16,7 @@ export interface SyncApi extends RunCreator {
   readonly users: {
     updateMe(body: UserProfileUpdateRequest): Promise<unknown>
     putBaseline(body: BaselineUpsertRequest): Promise<unknown>
+    updateGuidance(body: GuidanceSettingsPayload): Promise<unknown>
   }
 }
 
@@ -60,6 +62,12 @@ export function createSyncRuntime(deps: SyncDeps) {
       const api = deps.getApi()
       if (api === null || !deps.isSignedIn()) return
       await safe(() => api.users.updateMe(toProfileUpdateRequest(local)))
+    },
+    // 음성 안내 설정만 보낸다(서버에 대응이 분명한 필드). 서버 값으로 로컬 설정을 덮어쓰지 않는다.
+    async syncVoiceGuidance(settings: { readonly voiceGuide: boolean }): Promise<void> {
+      const api = deps.getApi()
+      if (api === null || !deps.isSignedIn()) return
+      await safe(() => api.users.updateGuidance(toGuidancePayload(settings)))
     },
     async syncBaseline(request: BaselineUpsertRequest): Promise<void> {
       const api = deps.getApi()
