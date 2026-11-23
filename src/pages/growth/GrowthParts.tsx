@@ -1,43 +1,8 @@
 import { Link } from "react-router-dom";
 import chevronRight from "../../assets/icons/chevron-right.svg";
-import heroArrow from "../../assets/home/hero-arrow.svg";
 import type { ChartView } from "../../features/growth/growthView";
 
 const CHART_HEIGHT = 102; // 눈금 0 ~ 맨 위 눈금 사이 (Figma 6.8px/km × 15km)
-
-// TODO: 기록 화면의 StateCard(#61)와 같은 모양이다. #61이 합쳐진 뒤 공통 컴포넌트를 쓴다.
-export function StateCard({
-  title,
-  body,
-  to,
-  actionLabel,
-}: {
-  title: string;
-  body: string;
-  to: string;
-  actionLabel: string;
-}) {
-  return (
-    <section className="flex flex-col gap-3 rounded-[24px] bg-soft p-6">
-      <h2 className="text-[20px] font-semibold leading-7">{title}</h2>
-      <p className="text-[14px] leading-5 text-muted">{body}</p>
-      <Link
-        to={to}
-        className="mt-3 flex h-16 w-full items-center gap-3 rounded-full bg-ink py-[10px] pl-7 pr-3 text-[18px] font-medium leading-[25px] text-app-bg"
-      >
-        <span className="min-w-0 flex-1">{actionLabel}</span>
-        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-full bg-lime">
-          <img
-            src={heroArrow}
-            alt=""
-            aria-hidden="true"
-            className="size-6 brightness-0"
-          />
-        </span>
-      </Link>
-    </section>
-  );
-}
 
 export function Metric({
   value,

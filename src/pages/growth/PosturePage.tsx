@@ -1,10 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { ScreenHeader } from '../../components/common/ScreenHeader'
+import { MY_ROUTES } from '../../features/my/routes'
 
 const GROWTH_PATH = '/growth'
-// 마이의 스마트 인솔 화면(/my/device)은 마이 Issue(#64)에서 만든다. 이 브랜치에서는 마이 메인으로 보내고, 그 화면이 합쳐진 뒤 바꾼다.
-const DEVICE_PATH = '/my'
 
 // Figma `POSTURE / No data`. 자세 측정 데이터는 아직 저장되지 않으므로 항상 이 화면이다.
 export function PosturePage() {
@@ -24,7 +23,7 @@ export function PosturePage() {
         <p className="mt-4 text-[14px] leading-5 text-muted">스마트 인솔을 연결한 뒤 달리면 지원되는 자세 데이터를 확인할 수 있어요.</p>
       </div>
       <div className="shrink-0 px-3 pb-[9px] pt-2">
-        <PrimaryButton label="인솔 연결 확인" onClick={() => navigate(DEVICE_PATH)} />
+        <PrimaryButton label="인솔 연결 확인" onClick={() => navigate(MY_ROUTES.device)} />
       </div>
     </div>
   )

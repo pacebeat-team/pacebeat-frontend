@@ -11,7 +11,8 @@ import {
 import { readGrowthRecordsFromBrowser, type GrowthRecordsResult } from '../features/growth/growthRecords'
 import { RUN_PATHS } from '../features/running/runFlow'
 import type { RunRecord } from '../features/running/types'
-import { BarChart, LinkRow, Metric, StateCard } from './growth/GrowthParts'
+import { StateCard } from './records/StateCard'
+import { BarChart, LinkRow, Metric } from './growth/GrowthParts'
 
 type Period = 'month' | 'week'
 
@@ -77,7 +78,7 @@ function FirstRecord({ records, now }: { records: readonly RunRecord[]; now: Dat
       </div>
       <p className="mt-2 text-[13px] leading-[18px] text-muted">첫 기록 · {first.dateText}</p>
       <div className="mt-6">
-        <StateCard title="다음 러닝" body="다음 러닝도 기록해 변화를 확인해요." to={RUN_PATHS.goal} actionLabel="다음 러닝 시작하기" />
+        <StateCard title="다음 러닝" body="다음 러닝도 기록해 변화를 확인해요." action={{ label: '다음 러닝 시작하기', to: RUN_PATHS.goal }} />
       </div>
     </>
   )
@@ -112,8 +113,7 @@ export function GrowthPage() {
         <StateCard
           title="아직 러닝 기록이 없어요"
           body="첫 러닝을 마치면 여기에 성장이 보여요."
-          to={RUN_PATHS.goal}
-          actionLabel="러닝 시작하기"
+          action={{ label: '러닝 시작하기', to: RUN_PATHS.goal }}
         />
       )
     } else if (state === 'first') {
@@ -144,7 +144,7 @@ export function GrowthPage() {
           {period === 'month' ? (
             monthly === null ? (
               <div className="mt-4">
-                <StateCard title="이번 달 기록이 없어요" body="이번 달에 달리면 여기에 쌓여요." to={RUN_PATHS.goal} actionLabel="러닝 시작하기" />
+                <StateCard title="이번 달 기록이 없어요" body="이번 달에 달리면 여기에 쌓여요." action={{ label: '러닝 시작하기', to: RUN_PATHS.goal }} />
               </div>
             ) : (
               <>
@@ -162,7 +162,7 @@ export function GrowthPage() {
             )
           ) : weekly === null ? (
             <div className="mt-4">
-              <StateCard title="이번 주 기록이 없어요" body="이번 주에 달리면 여기에 쌓여요." to={RUN_PATHS.goal} actionLabel="러닝 시작하기" />
+              <StateCard title="이번 주 기록이 없어요" body="이번 주에 달리면 여기에 쌓여요." action={{ label: '러닝 시작하기', to: RUN_PATHS.goal }} />
             </div>
           ) : (
             <div className="mt-4">
