@@ -133,7 +133,7 @@ describe('엔드포인트 경로와 메서드(OpenAPI 1.0.0)', () => {
     const api = createApi(createApiClient({ baseUrl: 'https://x.test', fetch: f.fn }))
     await api.health()
     await api.users.getMe()
-    await api.users.updateGuidance({ voice_guidance_enabled: false })
+    await api.users.updateGuidance({ voice_guidance_enabled: false, vibration_guidance_enabled: true, guidance_frequency_km: 1, vibration_intensity: 'medium' })
     await api.runs.get('a/b')
     await api.runs.list({ from: '2026-11-01' })
     await api.growth.posture('monthly')

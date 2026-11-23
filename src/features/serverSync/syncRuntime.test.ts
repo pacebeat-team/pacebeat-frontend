@@ -8,6 +8,7 @@ import { IMPORT_LEDGER_KEY } from './recordImport.ts'
 import { RUN_SYNC_QUEUE_KEY } from './runSyncQueue.ts'
 import { createSyncRuntime, SYNC_PENDING_KEY } from './syncRuntime.ts'
 import type { SyncApi } from './syncRuntime.ts'
+import { SERVER_GUIDANCE_FIXTURE, blankServerProfile } from '../../testing/testServerProfile.ts'
 
 // 가짜 API·저장소만 쓴다. 실제 서버에는 요청하지 않는다.
 const record = (over: Partial<RunRecord> = {}): RunRecord =>
@@ -65,7 +66,7 @@ function setup(opts: Opts = {}) {
       updateReflection: async (id, body) => { if (opts.failWrites) return boom(); reflections.push([id, body]) },
     },
     users: {
-      getMe: opts.getMe ?? (async () => { throw new NetworkError('x') }),
+      getMe: opts.getMe ?? (async () => blankServerProfile()),
       updateMe: async (b) => { if (opts.failWrites) return boom(); profile.push(b) },
       putBaseline: async (b) => { if (opts.failWrites) return boom(); baseline.push(b) },
       updateGuidance: async (b) => { if (opts.failWrites) return boom(); guidance.push(b) },
@@ -92,7 +93,8 @@ describe('러닝 기록 전송', () => {
     assert.equal(s.sent[0]?.client_session_id, 's1')
     assert.equal(s.rt.queue.list().length, 0)
   })
-  test('게스트·서버 꺼짐이면 대기열에만 남고 로그인하면 이어서 보낸다', async () => {
+  // 정책 변경(계정별 격리): 게스트에서 만든 작업은 로그인 계정으로 자동 이전·전송하지 않고 보존한다.
+  test('게스트·서버 꺼짐이면 대기열에만 남고, 로그인해도 게스트 작업은 보내지 않고 보존한다', async () => {
     const s = setup({ signedIn: false })
     await s.rt.syncRun(record())
     await s.rt.syncRun(record())
@@ -100,7 +102,10 @@ describe('러닝 기록 전송', () => {
     assert.equal(s.sent.length, 0)
     s.state.signedIn = true
     await s.rt.resume()
-    assert.equal(s.sent.length, 1)
+    assert.equal(s.sent.length, 0) // 게스트 작업은 로그인 계정으로 귀속되지 않는다
+    assert.equal(s.rt.quarantineSummary().guestQueueItems, 1) // 삭제되지 않고 보존된다
+    await s.rt.syncRun(record({ sessionId: 's9', recordId: 'rec-s9' })) // 로그인 후 새로 만든 작업은 보낸다
+    assert.deepEqual(s.sent.map((r) => r.client_session_id), ['s9'])
     const off = setup({ apiOn: false })
     await off.rt.syncRun(record())
     assert.equal(off.sent.length, 0)
@@ -122,16 +127,22 @@ describe('러닝 기록 전송', () => {
 })
 
 describe('대기 작업(프로필·기초 측정·음성 안내)', () => {
-  test('로그인했을 때만 보내고, 미입력 값은 null로 보낸다', async () => {
+  // 정책 변경(계정별 격리): 게스트 상태에서 쌓인 대기 작업은 로그인해도 보내지 않는다.
+  test('로그인했을 때만 보내고, 게스트 작업은 로그인해도 보내지 않으며, 미입력 값은 보내지 않는다(서버 값 유지)', async () => {
     const s = setup({ signedIn: false })
     await s.rt.syncProfile()
     await s.rt.syncVoiceGuidance({ voiceGuide: false })
     assert.equal(s.profile.length + s.guidance.length, 0)
     s.state.signedIn = true
     await s.rt.resume()
+    assert.equal(s.profile.length + s.guidance.length, 0) // 게스트 작업 자동 이전 없음
+    assert.deepEqual(s.rt.pendingSummary('guest'), { profile: true, baseline: false, voiceGuide: true, reflections: 0 }) // 보존
+    await s.rt.syncProfile()
+    await s.rt.syncVoiceGuidance({ voiceGuide: false })
     assert.equal(s.profile.length, 1)
-    assert.equal((s.profile[0] as { height_cm: unknown }).height_cm, null)
-    assert.deepEqual(s.guidance, [{ voice_guidance_enabled: false }])
+    assert.equal('height_cm' in (s.profile[0] as object), false) // 미입력은 null이 아니라 필드 생략(서버 값을 지우지 않는다)
+    assert.equal('weight_kg' in (s.profile[0] as object), false)
+    assert.deepEqual(s.guidance, [{ ...SERVER_GUIDANCE_FIXTURE, voice_guidance_enabled: false }]) // 서버의 현재 값 위에 음성 안내만 덮은 전체 payload
     assert.deepEqual(s.rt.pendingSummary(), { profile: false, baseline: false, voiceGuide: false, reflections: 0 })
   })
   test('전송이 실패하면 대기 작업으로 남아 다음에 다시 보낸다', async () => {
@@ -203,7 +214,7 @@ describe('서버 → 로컬 프로필', () => {
     assert.deepEqual(s.patches[0], { birthYear: 1999, gender: 'female', weightKg: 55 })
   })
   test('서버 오류면 변경하지 않는다', async () => {
-    const s = setup()
+    const s = setup({ getMe: async () => { throw new NetworkError('x') } })
     await s.rt.pullProfile()
     assert.equal(s.patches.length, 0)
   })
