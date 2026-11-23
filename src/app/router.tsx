@@ -16,6 +16,7 @@ import { ArrivalPage } from '../pages/running/ArrivalPage'
 import { RecordsPage } from '../pages/RecordsPage'
 import { RecordDetailPage } from '../pages/records/RecordDetailPage'
 import { GrowthPage } from '../pages/GrowthPage'
+import { PosturePage } from '../pages/growth/PosturePage'
 import { MyPage } from '../pages/MyPage'
 import { ProfileEditPage } from '../pages/my/ProfileEditPage'
 import { GuidanceSettingsPage } from '../pages/my/GuidanceSettingsPage'
@@ -132,7 +133,13 @@ export const router = createBrowserRouter([
               { path: ':recordId', element: <RecordDetailPage /> },
             ],
           },
-          { path: 'growth', element: <GrowthPage /> },
+          {
+            path: 'growth',
+            children: [
+              { index: true, element: <GrowthPage /> },
+              { path: 'posture', element: <PosturePage /> },
+            ],
+          },
           {
             path: 'my',
             children: [
