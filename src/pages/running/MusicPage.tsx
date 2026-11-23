@@ -5,17 +5,18 @@ import runPlayActive from '../../assets/icons/run-play-active.svg'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { ScreenHeader } from '../../components/common/ScreenHeader'
 import { TextButton } from '../../components/common/TextButton'
-import { MUSIC_TRACKS } from '../../features/running/music'
 import { getMusicPreviewPath, RUN_PATHS } from '../../features/running/runFlow'
 import { runSetupStore } from '../../features/running/runSetupStore'
 import { runStore, useRunStore } from '../../features/running/runStore'
+import { useMusicTracks } from '../../features/serverSync/useMusicTracks'
 
-// Figma `RUN / Music`. 곡을 누르면 미리 듣기 화면으로 이동한다(실제 재생은 없다).
+// Figma `RUN / Music`. 곡 목록은 로컬 MUSIC_TRACKS이며, 로그인했고 서버 연동이 켜져 있으면 서버 프리셋의 순서만 반영한다(useMusicTracks). 곡을 누르면 미리 듣기 화면으로 이동한다(실제 재생은 없다).
 // "기준 케이던스 …" 줄은 기준 데이터가 없어 만들지 않는다.
 export function MusicPage() {
   const navigate = useNavigate()
+  const tracks = useMusicTracks()
   const musicTrackId = useRunStore((state) => state.draft.musicTrackId)
-  const selectedId = musicTrackId ?? MUSIC_TRACKS[0].id
+  const selectedId = musicTrackId ?? tracks[0].id
 
   const proceed = useCallback(
     (nextTrackId: string | null) => {
@@ -43,7 +44,7 @@ export function MusicPage() {
         </div>
 
         <ul aria-label="음악" className="mt-[22px] flex flex-col">
-          {MUSIC_TRACKS.map((track) => {
+          {tracks.map((track) => {
             const selected = track.id === selectedId
             return (
               <li key={track.id} className="border-b border-line last:border-b-0">
