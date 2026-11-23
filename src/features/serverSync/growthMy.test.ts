@@ -6,7 +6,7 @@ import { createApiClient } from '../../lib/api/client.ts'
 import { ApiError } from '../../lib/api/errors.ts'
 import { apiMutations, apiQueries } from './queries.ts'
 import { fromPostureGrowth, fromRunningGrowth } from './growthMapper.ts'
-import { mergeServerGuidance, toGuidancePayload } from './guidanceMapper.ts'
+import { mergeServerGuidance, toFullGuidancePayload } from './guidanceMapper.ts'
 import { fromInsolePair } from './insoleMapper.ts'
 
 // 가짜 데이터와 가짜 fetch만 쓴다. 실제 서버·Supabase에는 요청하지 않는다.
@@ -30,7 +30,8 @@ describe('Growth 변환', () => {
 
 describe('안내 설정·인솔 변환', () => {
   test('음성 안내만 매핑하고 나머지 로컬 설정은 보존한다', () => {
-    assert.deepEqual(toGuidancePayload({ voiceGuide: false }), { voice_guidance_enabled: false })
+    // 서버가 4개 필드를 전부 교체하므로 음성 안내만 보내지 않고 서버의 현재 값 위에 덮은 전체 payload를 만든다.
+    assert.deepEqual(toFullGuidancePayload({ voiceGuide: false }, { voice_guidance_enabled: true, vibration_guidance_enabled: false, guidance_frequency_km: 2, vibration_intensity: 'high' }), { voice_guidance_enabled: false, vibration_guidance_enabled: false, guidance_frequency_km: 2, vibration_intensity: 'high' })
     const local = { beatGuide: true, voiceGuide: true, frequency: 'both' as const, autoPause: false }
     const merged = mergeServerGuidance(local, { voice_guidance_enabled: false, guidance_frequency_km: 2, vibration_intensity: 'high' })
     assert.equal(merged.voiceGuide, false)
@@ -75,11 +76,11 @@ describe('Query·Mutation 옵션 (가짜 fetch)', () => {
     assert.equal(bad.qc.getQueryData(['growth', 'running', 'monthly']), undefined)
   })
 
-  test('안내 설정 수정 mutation은 음성 안내만 보내고 프로필 캐시를 무효화한다', async () => {
+  test('안내 설정 수정 mutation은 전체 payload를 보내고 프로필 캐시를 무효화한다', async () => {
     const s = setup(() => ok({ voice_guidance_enabled: false }))
     s.qc.setQueryData(['profile'], {})
     const opts = apiMutations.updateGuidance(s.api, s.qc)
-    await opts.mutationFn(toGuidancePayload({ voiceGuide: false }))
+    await opts.mutationFn(toFullGuidancePayload({ voiceGuide: false }, { voice_guidance_enabled: true, vibration_guidance_enabled: true, guidance_frequency_km: 1, vibration_intensity: 'medium' }) as never)
     assert.equal(s.calls[0].method, 'PATCH')
     assert.equal(s.calls[0].url, 'https://api.test/api/v1/users/me/guidance')
     await opts.onSuccess()
