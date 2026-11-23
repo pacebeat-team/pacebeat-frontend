@@ -43,14 +43,19 @@ describe('API 연동 비활성 상태(설정 없음) 회귀', () => {
     }
   })
 
-  test('어떤 화면·Store도 아직 API·인증·서버 동기화 모듈을 직접 쓰지 않는다(연결은 화면 PR 병합 후)', () => {
-    const allowed = ['lib/api/', 'lib/auth/', 'features/serverSync/', 'main.tsx']
+  test('화면·Store는 API·서버 동기화 모듈을 직접 쓰지 않는다. 인증(lib/auth)은 로그인·계정 화면 두 곳만 쓴다', () => {
+    const allowed = ['lib/api/', 'lib/auth/', 'features/serverSync/', 'testing/', 'main.tsx'] // testing/: 테스트 전용 보조 모듈(앱 번들에 들어가지 않는다)
+    const authScreens = ['pages/my/LoginPage.tsx', 'pages/my/AccountPage.tsx'] // 로그인·로그아웃만 한다(서버 데이터는 읽지 않는다)
+    const musicScreens = ['pages/running/MusicPage.tsx'] // 음악 목록 순서만 서버 프리셋을 반영한다(features/serverSync/useMusicTracks 하나만 가져온다)
     const offenders: string[] = []
     for (const file of listSources(SRC)) {
       const rel = relative(SRC, file).split('\\').join('/')
       if (allowed.some((a) => rel.startsWith(a) || rel === a)) continue
       const text = readFileSync(file, 'utf8')
-      if (/from\s+['"][^'"]*(lib\/api|lib\/auth|features\/serverSync|serverSync)\b[^'"]*['"]/.test(text)) offenders.push(rel)
+      const imports = [...text.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1])
+      const apiOrSync = imports.some((i) => /lib\/api\b/.test(i) || (/serverSync\b/.test(i) && !(musicScreens.includes(rel) && /serverSync\/useMusicTracks$/.test(i))))
+      const authImport = imports.some((i) => /lib\/auth\b/.test(i))
+      if (apiOrSync || (authImport && !authScreens.includes(rel))) offenders.push(rel)
     }
     assert.deepEqual(offenders, [])
   })
