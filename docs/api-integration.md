@@ -425,3 +425,31 @@ Issue 1~3에서 연동된 endpoint 전체. 연동되지 않은 endpoint는 대�
 | 목표 페이스 검증·음악 프리셋·Home 요약의 서버 사용 여부 | endpoint 함수만 있고 사용 여부는 미결정 |
 
 **병합 후 할 일**: 변환 함수·대기열을 프로필·온보딩 화면, 러닝 종료 저장, Records·Result에 연결하고 Home·Records·Result 일관성을 검증한다. 대기열 flush 시점(앱 시작·로그인 후·러닝 종료 직후)은 화면 연결 때 정한다.
+
+---
+
+## 6. #71 진행 상태 (Growth·My)
+
+화면 PR #66~#68(My·Growth)이 아직 병합되지 않아 화면 연결은 하지 않았다. Growth 러닝 통계의 실제 연결은 #70의 기록 저장·조회 기반이 화면에 연결된 뒤 진행한다.
+
+**추가한 것** (순수 함수·옵션 팩토리, 화면·Store에 연결하지 않음)
+- `growthMapper`: 러닝·자세 통계 응답 → 화면용 모델. `null`을 유지하고(0 금지), 기록이 없으면 `isEmpty`. 구간 날짜는 문자열 그대로 보관.
+- `guidanceMapper`: 음성 안내(`voiceGuide` ↔ `voice_guidance_enabled`)만 매핑. 박자 안내·빈도·자동 일시정지는 로컬 값을 그대로 둔다(서버 필드를 만들지 않음).
+- `insoleMapper`: 등록된 인솔 상태 → 화면용 모델(등록 없음·값 없음은 null). BLE·펌웨어 연동은 하지 않음.
+- `queries.ts`에 Growth(러닝·자세)·인솔 Query와 안내 설정 수정 Mutation 추가.
+
+**자세 리포트 계약 분석** (`PostureReportPayload`·`PostureGrowthResponse` ↔ 앱의 `PostureSummary`)
+| 앱 모델 | 서버 | 상태 |
+|---|---|---|
+| 측정 쪽(both/left/right) | `left_connected`/`right_connected` | 연결 여부만 있어 "측정됨"과 같은지 미확정 |
+| 좌우 밸런스(%) | `left_load_ratio_pct`/`right_load_ratio_pct` | 이름 대응은 가능, 합계 100·단위·산출 방식 SDK 확인 필요 |
+| 압력 3구역(뒤꿈치·중간·앞꿈치) | `*_pressure_distribution`(forefoot/midfoot/heel) | 이름 대응 가능, 구역 정의 SDK 확인 필요 |
+| (없음) | 접지 시간, 착지 패턴, 피드백 | 앱 모델에 대응 없음 |
+| 28일 집계·7일 비교 | 서버는 주간·월간 bucket | 서버 집계 기준(시간대·주 시작 요일)이 달라 대체 불가 — 앱 집계 유지 |
+SDK 계약 전에는 `PostureSummary`로 변환하지 않고(좌우 판정 기준도 만들지 않음), 서버 값은 이름만 바꾼 중간 모델로 둔다.
+
+**미확정·보류**
+- Growth 서버 집계의 시간대·주 시작 요일·`period_start/end` 형식, 서버 집계를 화면 기준으로 쓸지(현재 로컬 집계 유지).
+- 안내 빈도(`guidance_frequency_km` 숫자) ↔ 로컬 선택지(perKm/offPace/both), 박자 안내·자동 일시정지의 서버 대응.
+- 데이터 내보내기 응답 형식(기존 CSV/JSON 내보내기 유지), 계정 전체 삭제 연동(사용자 확인·실패 시 로컬 보존·Supabase 계정 삭제 여부 협의 필요), 개별 기록 삭제 API 없음.
+- 자세 리포트 SDK 계약.
