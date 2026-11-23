@@ -40,10 +40,11 @@ function record(over: Partial<RunRecord> = {}): RunRecord {
 }
 
 describe('프로필·온보딩 변환', () => {
-  test('로컬 → 서버: null은 null로, 동의는 필수 4개가 모두 있을 때만 보낸다', () => {
+  test('로컬 → 서버: 미입력은 필드 생략(null 아님), 동의는 필수 4개가 모두 있을 때만 보낸다', () => {
     const req = toProfileUpdateRequest({ profile, consent, completedAt: T0, experienceLevel: 'occasional', weeklyRuns: '2' })
     assert.equal(req.nickname, '달리미')
-    assert.equal(req.weight_kg, null)
+    assert.equal('weight_kg' in req, false) // 비어 있는 몸무게는 보내지 않는다(서버 값 유지)
+    assert.equal('birth_year' in req, true)
     assert.equal(req.running_experience, 'occasional')
     assert.equal(req.weekly_runs, '2')
     assert.equal(req.consent?.privacy_policy, true)
@@ -54,7 +55,9 @@ describe('프로필·온보딩 변환', () => {
     const partial = toProfileUpdateRequest({ profile: { ...profile, nickname: '' }, consent: { ...consent, privacyPolicy: false }, completedAt: null, experienceLevel: null, weeklyRuns: null })
     assert.equal('consent' in partial, false)
     assert.equal('profile_completed_at' in partial, false)
-    assert.equal(partial.nickname, null)
+    assert.equal('nickname' in partial, false) // 빈 닉네임은 null이 아니라 생략
+    assert.equal(partial.height_cm, 165) // 있는 값은 그대로 보낸다
+    assert.equal('weight_kg' in partial, false) // 비어 있는 몸무게는 생략
   })
   test('서버 → 로컬: 누락은 안전한 기본값(0이 아니라 null/빈 값)', () => {
     const res: UserProfileResponse = {
@@ -82,9 +85,10 @@ describe('기초 측정 변환', () => {
     const ok = baselineRequestFromMetrics({ validMs: 300_000, avgPaceSecPerKm: 400, distanceM: 750 }, T0)
     assert.equal(ok.baseline_pace_sec_per_km, 400)
     assert.equal(ok.cadence_spm, null)
-    assert.equal('quality_status' in ok, false)
+    assert.equal(ok.quality_status, 'valid') // 앱이 기준으로 채택한 측정(기준 페이스 있음)은 valid를 명시한다
     const short = baselineRequestFromMetrics({ validMs: 60_000, avgPaceSecPerKm: 400, distanceM: 150 }, null)
     assert.equal(short.baseline_pace_sec_per_km, null)
+    assert.equal('quality_status' in short, false) // 채택하지 못한 이유를 앱이 구분하지 않으므로 보내지 않는다(미확정)
     assert.equal(short.measured_at, null)
     assert.equal(baselineSkippedRequest().skipped, true)
   })

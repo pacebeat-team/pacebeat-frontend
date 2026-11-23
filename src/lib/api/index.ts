@@ -2,8 +2,10 @@ import { auth } from '../auth/index.ts'
 import { createApiClient } from './client.ts'
 import { readApiConfig } from './config.ts'
 import { createApi } from './endpoints.ts'
+import { createOwnerBoundApi } from './ownerBound.ts'
+import { readUserId } from '../auth/authService.ts'
 
-export { ApiError, NetworkError } from './errors.ts'
+export { ApiError, NetworkError, OwnerChangedError } from './errors.ts'
 export { queryKeys } from './queryKeys.ts'
 export type * from './types.ts'
 
@@ -22,3 +24,8 @@ export const api =
           onUnauthorized: () => auth.handleUnauthorized(),
         }),
       )
+
+// 요청을 만든 계정에 묶인 API(동기화 전송·가져오기용). 서버 연동이 꺼져 있으면 null.
+export function getOwnerBoundApi(userId: string) {
+  return config === null ? null : createOwnerBoundApi({ baseUrl: config.baseUrl, auth: { ...auth, getState: auth.getState, readUserId }, expectedUserId: userId })
+}
