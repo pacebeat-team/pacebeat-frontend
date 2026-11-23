@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
 import chevronRight from '../assets/icons/chevron-right.svg'
 import {
@@ -8,9 +8,10 @@ import {
   type CalendarDay,
   type RecordRowView,
 } from '../features/records/recordsView'
+import { createRecordsLoader } from '../features/records/recordsLoad'
 import { RUN_PATHS } from '../features/running/runFlow'
-import { createRunStorage, type RecordsReadResult } from '../features/running/runStorage'
-import { StateCard } from './records/StateCard'
+import { createRunStorage, RUN_STORAGE_KEYS, type RecordsReadResult } from '../features/running/runStorage'
+import { LoadingCard, StateCard } from './records/StateCard'
 import type { RunRecord } from '../features/running/types'
 
 type RecordsTab = 'calendar' | 'list'
@@ -18,11 +19,7 @@ type RecordsTab = 'calendar' | 'list'
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 function readRecords(): RecordsReadResult {
-  try {
-    return createRunStorage().readRecords()
-  } catch {
-    return { ok: false, reason: 'unreadable' }
-  }
+  return createRunStorage().readRecords()
 }
 
 function SummaryItem({ value, unit, label }: { value: string; unit: string; label: string }) {
@@ -134,22 +131,35 @@ function RecordRow({ row }: { row: RecordRowView }) {
 }
 
 // Figma `RECORDS`(06). 저장된 러닝 기록으로 요약·달력·목록을 보여 준다.
-// 마운트할 때 저장된 기록을 한 번 읽는다(비동기 읽기가 없으므로 로딩 화면을 두지 않는다).
+// 마운트할 때 기록을 조회한다: Loading → 기록 / Empty / Error. 읽기가 즉시 끝나면 Loading은 바로 결과로 바뀐다(지연을 만들지 않는다).
+// 다른 탭에서 기록이 바뀌면 다시 조회한다(보이는 기록은 유지한 채 갱신한다).
 export function RecordsPage() {
   const [now] = useState(() => new Date())
-  const [result, setResult] = useState(readRecords)
+  const [loader] = useState(() => createRecordsLoader(readRecords))
+  const load = useSyncExternalStore(loader.subscribe, loader.getState)
   const [tab, setTab] = useState<RecordsTab>('calendar')
 
+  useEffect(() => {
+    loader.load()
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === RUN_STORAGE_KEYS.records) loader.load()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [loader])
+
   let body
-  if (!result.ok) {
+  if (load.phase === 'loading') {
+    body = <LoadingCard />
+  } else if (load.phase === 'error') {
     body = (
       <StateCard
         title="기록을 불러오지 못했어요"
         body="연결을 확인한 뒤 다시 시도해 주세요."
-        action={{ label: '다시 시도', onClick: () => setResult(readRecords()) }}
+        action={{ label: '다시 시도', onClick: loader.load }}
       />
     )
-  } else if (result.records.length === 0) {
+  } else if (load.phase === 'empty') {
     body = (
       <StateCard
         title="아직 러닝 기록이 없어요"
@@ -158,7 +168,7 @@ export function RecordsPage() {
       />
     )
   } else {
-    const records = result.records
+    const records = load.records
     const summary = buildRecordsSummary(records, now)
     const rows = buildRecordRows(records, now, tab === 'calendar')
     body = (

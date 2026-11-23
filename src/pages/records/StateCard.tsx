@@ -1,6 +1,19 @@
 import { Link } from 'react-router-dom'
 import heroArrow from '../../assets/home/hero-arrow.svg'
 
+// 기록 조회 중 카드 (Figma RECORDS / Loading, feedback State=Loading). 트랙 4px, 채움 96px은 시안 그대로 고정이다.
+export function LoadingCard() {
+  return (
+    <section role="status" aria-live="polite" className="flex w-full flex-col gap-2 rounded-[24px] bg-soft p-6">
+      <h2 className="text-[20px] font-semibold leading-[30px] text-ink">기록을 불러오는 중</h2>
+      <p className="h-[42px] text-[14px] leading-[21px] text-muted">잠시만 기다려 주세요.</p>
+      <div aria-hidden="true" className="flex h-[4px] w-full overflow-clip rounded-[2px] bg-[#dedee5]">
+        <div className="h-[4px] w-[96px] rounded-[2px] bg-ink" />
+      </div>
+    </section>
+  )
+}
+
 // Empty·Error 공통 카드 (Figma RECORDS Empty/Error)
 export function StateCard({
   title,
