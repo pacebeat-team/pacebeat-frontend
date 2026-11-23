@@ -22,6 +22,7 @@ import { MyPage } from '../pages/MyPage'
 import { ProfileEditPage } from '../pages/my/ProfileEditPage'
 import { GuidanceSettingsPage } from '../pages/my/GuidanceSettingsPage'
 import { AccountPage } from '../pages/my/AccountPage'
+import { LoginPage } from '../pages/my/LoginPage'
 import { DataPage } from '../pages/my/DataPage'
 import { DataExportPage } from '../pages/my/DataExportPage'
 import { DataDeletePage } from '../pages/my/DataDeletePage'
@@ -149,6 +150,7 @@ export const router = createBrowserRouter([
               { path: 'profile', element: <ProfileEditPage /> },
               { path: 'guidance', element: <GuidanceSettingsPage /> },
               { path: 'account', element: <AccountPage /> },
+              { path: 'account/login', element: <LoginPage /> },
               { path: 'data', element: <DataPage /> },
               { path: 'data/export', element: <DataExportPage /> },
               { path: 'data/delete', element: <DataDeletePage /> },

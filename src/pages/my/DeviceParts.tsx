@@ -9,6 +9,7 @@ export function DeviceScreen({
   onBack,
   onConfirm,
   confirmLabel = '확인',
+  confirmDisabled = false,
   secondary,
   children,
 }: {
@@ -16,6 +17,8 @@ export function DeviceScreen({
   onBack: () => void
   onConfirm?: () => void
   confirmLabel?: string
+  // 주요 버튼을 누를 수 없게 한다(기본은 눌림)
+  confirmDisabled?: boolean
   // 주요 버튼 아래의 보조 버튼(예: 돌아가기)
   secondary?: { label: string; onClick: () => void }
   children: ReactNode
@@ -29,7 +32,7 @@ export function DeviceScreen({
       </div>
       {onConfirm !== undefined && (
         <div className="shrink-0 px-3 pb-[9px] pt-2">
-          <PrimaryButton label={confirmLabel} onClick={onConfirm} />
+          <PrimaryButton label={confirmLabel} onClick={onConfirm} disabled={confirmDisabled} />
           {secondary !== undefined && <TextButton label={secondary.label} onClick={secondary.onClick} />}
         </div>
       )}
