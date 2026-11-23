@@ -24,6 +24,14 @@ export class NetworkError extends Error {
   }
 }
 
+// 요청을 만든 계정이 더 이상 현재 로그인 계정이 아니라서 보내지 않은 경우(로그아웃·계정 전환). 요청은 서버로 나가지 않았다.
+export class OwnerChangedError extends Error {
+  constructor() {
+    super('요청을 만든 계정이 바뀌어 보내지 않았어요.')
+    this.name = 'OwnerChangedError'
+  }
+}
+
 export function parseApiError(status: number, body: unknown): ApiError {
   if (typeof body === 'object' && body !== null) {
     const data = body as Record<string, unknown>
