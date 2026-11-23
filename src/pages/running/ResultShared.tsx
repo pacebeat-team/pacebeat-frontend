@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
-import { formatPace } from '../../features/running/format'
+import { formatDistanceKm2, formatPace } from '../../features/running/format'
 import { REFLECTION_MEMO_MAX } from '../../features/running/reflection'
 import { runResultStore, useRunResultStore } from '../../features/running/runResultStore'
 import type { ReflectionDifficulty, ReflectionReason, RunReflection, RunSplit } from '../../features/running/types'
@@ -41,7 +41,7 @@ export function DifficultyChips() {
 }
 
 function splitLabel(split: RunSplit): string {
-  return split.distanceM >= 1000 ? `${split.index} km` : `마지막 ${(split.distanceM / 1000).toFixed(2)} km`
+  return split.distanceM >= 1000 ? `${split.index} km` : `마지막 ${formatDistanceKm2(split.distanceM)} km`
 }
 
 export function SplitRows({ splits }: { splits: readonly RunSplit[] }) {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
+import { getGuidanceSnapshot } from '../../features/my/guidanceSettingsStore'
 import { COUNTDOWN_SECONDS, getCountdownValue } from '../../features/running/runProgress'
 import { RUN_PATHS } from '../../features/running/runFlow'
 import { runLive } from '../../features/running/runLive'
@@ -51,7 +52,7 @@ export function CountdownPage() {
       finished = true
       window.clearInterval(id)
       startedRef.current = true
-      runLive.begin(mode)
+      runLive.begin(mode, getGuidanceSnapshot())
       navigate(RUN_PATHS.active, { replace: true })
     }, 200)
 

@@ -1,3 +1,4 @@
+import type { PostureSummary } from './postureSummary.ts'
 // 일반 러닝(RUN) 도메인 타입.
 // - 기초 측정(features/measurement)과 별개의 기능이다. 기초 측정의 Store·저장 키·완료 로직을 쓰지 않는다.
 // - 시각은 epoch ms, 시간 길이는 ms 또는 초(필드 이름에 단위를 적는다). 값을 구할 수 없으면 0이 아니라 null이다.
@@ -68,8 +69,8 @@ export interface RunRecord {
   readonly musicTrackId: string | null
   readonly result: RunResult
   readonly reflection: RunReflection | null
-  // 센서 리포트. 이번 범위에서는 항상 null이다(추정값을 만들지 않는다).
-  readonly sensorReport: null
+  // 최종 자세 요약. SDK가 연결되기 전에는 항상 null이다(추정값을 만들지 않는다). 손상된 값은 읽을 때 null로 바뀌고 러닝 기록은 보존된다.
+  readonly sensorReport: PostureSummary | null
 }
 
 // 거리 샘플: 러닝 경과 시간(ms, 일시정지 제외)과 그 시점의 누적 거리(m). 구간(split) 계산에 쓴다.

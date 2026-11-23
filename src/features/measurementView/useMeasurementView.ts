@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { isDevBuild } from '../../lib/devEnv'
 import type { SessionStatus } from '../measurement/types'
 import { measurementStore, parseUrlMode, REAL_TARGET_DURATION_MS, useMeasurementStore } from '../../stores/measurementStore'
 import type { UrlMode } from '../../stores/measurementStore'
@@ -12,7 +13,7 @@ import type { MeasurementActions, MeasurementView, RestoreView } from './types'
 const urlMode: UrlMode =
   typeof window === 'undefined'
     ? { virtual: null, mock: false }
-    : parseUrlMode(window.location.search, import.meta.env.DEV)
+    : parseUrlMode(window.location.search, isDevBuild())
 
 if (typeof window !== 'undefined') {
   // 앱이 처음 로드될 때, 저장된 실제 측정을 복원한다. 가상(?virtual)과 Mock(?scenario) 모드에서는 저장분을 읽지도 지우지도 않는다.

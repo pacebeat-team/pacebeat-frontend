@@ -150,7 +150,7 @@ function createLeakyGeolocation(clock: ManualClock) {
 
 function setup(env?: () => GeolocationEnv) {
   const clock = new ManualClock(BASE)
-  const store = createMeasurementStore({ clock, realEnv: env })
+  const store = createMeasurementStore({ allowVirtual: true, clock, realEnv: env })
   return { clock, store }
 }
 
@@ -158,6 +158,7 @@ function setupReal() {
   const clock = new ManualClock(BASE)
   const geo = createFakeGeolocation(clock)
   const store = createMeasurementStore({
+    allowVirtual: true,
     clock,
     realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
   })
@@ -345,6 +346,7 @@ describe('이전 측정의 늦은 콜백 (실제 브라우저가 해제 뒤에 �
     const clock = new ManualClock(BASE)
     const geo = createLeakyGeolocation(clock)
     const store = createMeasurementStore({
+      allowVirtual: true,
       clock,
       realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
     })
@@ -605,6 +607,7 @@ describe('실제 GPS 측정의 10분 자동 종료', () => {
     }
     const clock = new LateClock(BASE)
     const store = createMeasurementStore({
+      allowVirtual: true,
       clock,
       realEnv: () => ({ isSecureContext: true, geolocation: createFakeGeolocation(clock).geolocation }),
     })
@@ -943,8 +946,10 @@ describe('주소 모드 (parseUrlMode)', () => {
     assert.deepEqual(parseUrlMode('?virtual=__proto__', false), { virtual: null, mock: false })
   })
 
-  test('가상 모드는 배포 환경(isDev=false)에서도 켜진다', () => {
-    assert.deepEqual(parseUrlMode('?virtual=steady', false), { virtual: 'steady', mock: false })
+  test('가상 모드는 배포 환경(isDev=false)에서는 ?virtual이 있어도 켜지지 않는다 (실제 GPS)', () => {
+    assert.deepEqual(parseUrlMode('?virtual=steady', false), { virtual: null, mock: false })
+    assert.deepEqual(parseUrlMode('?virtual', false), { virtual: null, mock: false })
+    assert.deepEqual(parseUrlMode('?virtual=gps-lost&scenario=normal', false), { virtual: null, mock: false })
   })
 
   test('?scenario=는 개발 환경에서 기존 Mock 모드를 켠다', () => {
@@ -996,6 +1001,7 @@ function setupStored(initial: Record<string, string> = {}) {
   const geo = createFakeGeolocation(clock)
   const fake = createFakeStorage(initial)
   const store = createMeasurementStore({
+    allowVirtual: true,
     clock,
     realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
     storage: fake.storage,
@@ -1194,6 +1200,7 @@ describe('저장 실패가 측정에 영향을 주지 않는다', () => {
       const clock = new ManualClock(BASE)
       const geo = createFakeGeolocation(clock)
       const store = createMeasurementStore({
+        allowVirtual: true,
         clock,
         realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
         storage,
@@ -1211,7 +1218,7 @@ describe('가상 측정과 저장', () => {
   function setupVirtualStored(initial: Record<string, string> = {}) {
     const clock = new ManualClock(BASE)
     const fake = createFakeStorage(initial)
-    const store = createMeasurementStore({ clock, storage: fake.storage })
+    const store = createMeasurementStore({ allowVirtual: true, clock, storage: fake.storage })
     return { clock, store, ...fake }
   }
 
@@ -1266,6 +1273,7 @@ describe('가상 측정과 저장', () => {
     const geo = createFakeGeolocation(clock)
     const fake = createFakeStorage()
     const store = createMeasurementStore({
+      allowVirtual: true,
       clock,
       realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
       storage: fake.storage,
@@ -1298,6 +1306,7 @@ function setupRestored(raw: string, afterMs: number, seconds = 10) {
   const geo = createFakeGeolocation(clock)
   const fake = createFakeStorage({ [STORAGE_KEY]: raw })
   const store = createMeasurementStore({
+    allowVirtual: true,
     clock,
     realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
     storage: fake.storage,
@@ -1411,6 +1420,7 @@ describe('새로고침 복원 (hydrate)', () => {
     const geo = createFakeGeolocation(clock)
     const fake = createFakeStorage({ [STORAGE_KEY]: raw })
     const store = createMeasurementStore({
+      allowVirtual: true,
       clock,
       realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
       storage: fake.storage,
@@ -1425,7 +1435,7 @@ describe('새로고침 복원 (hydrate)', () => {
 
   test('storage가 없으면 hydrate는 아무 일도 하지 않는다', () => {
     const clock = new ManualClock(BASE)
-    const store = createMeasurementStore({ clock, storage: null })
+    const store = createMeasurementStore({ allowVirtual: true, clock, storage: null })
     store.getState().hydrate()
     assert.equal(store.getState().session, null)
   })
@@ -1663,5 +1673,68 @@ describe('새로고침과 화면 이탈 구분 (unloading)', () => {
     clock.advance(30_000)
     store.getState().saveNow()
     assert.equal(calls.filter((c) => c === 'set').length, count)
+  })
+})
+
+// 정책: 가상 GPS는 개발 환경에서만 켜진다. 배포 환경에서는 가상을 요청해도(주소, 개발자 도구 등) 실제 GPS 흐름으로 처리한다.
+describe('가상 GPS 배포 차단 (allowVirtual=false 또는 기본값)', () => {
+  function setupBlocked(allowVirtual?: boolean) {
+    const clock = new ManualClock(BASE)
+    const geo = createFakeGeolocation(clock)
+    const fake = createFakeStorage()
+    const store = createMeasurementStore({
+      clock,
+      realEnv: () => ({ isSecureContext: true, geolocation: geo.geolocation }),
+      storage: fake.storage,
+      ...(allowVirtual === undefined ? {} : { allowVirtual }),
+    })
+    return { clock, geo, store, ...fake }
+  }
+
+  test('가상을 요청해도 실제 GPS로 시작한다: 실제 위치 감시 1회, 가상 시나리오 없음', () => {
+    const { geo, store } = setupBlocked(false)
+    store.getState().start(virtual('steady'))
+    assert.deepEqual(store.getState().runSource, { kind: 'real' })
+    assert.equal(geo.watchCalls, 1)
+    assert.equal(store.getState().targetDurationMs, 600_000)
+  })
+
+  test('가상 좌표·타이머가 실행되지 않는다: 시간이 흘러도 거리가 쌓이지 않고 시나리오 완료로 끝나지 않는다', () => {
+    const { clock, store } = setupBlocked(false)
+    store.getState().start(virtual('steady'))
+    clock.advance(200_000) // 가상 steady는 이 안에 자동 완료된다
+    const { session, tracker } = store.getState()
+    assert.equal(session?.status, 'running')
+    assert.equal(tracker.acceptedCount, 0)
+    assert.equal(metricsOf(store).distanceM, 0)
+  })
+
+  test('실제 좌표만 거리에 반영되고, 실제 측정으로 저장된다', () => {
+    const { geo, store, calls } = setupBlocked(false)
+    store.getState().start(virtual('gps-lost'))
+    for (let sec = 0; sec <= 10; sec += 1) geo.emitRunnerAt(sec)
+    assertClose(metricsOf(store).distanceM, 30)
+    assert.ok(calls.includes('set'), '실제 측정은 저장된다')
+  })
+
+  test('허용 여부를 정하지 않으면(테스트·개발 빌드가 아닌 환경) 차단이 기본이다', () => {
+    const { geo, store } = setupBlocked()
+    store.getState().start(virtual('steady'))
+    assert.deepEqual(store.getState().runSource, { kind: 'real' })
+    assert.equal(geo.watchCalls, 1)
+  })
+
+  test('허용하면(개발 환경) 기존처럼 가상 GPS로 시작하고 저장하지 않는다', () => {
+    const { store, calls } = setupBlocked(true)
+    store.getState().start(virtual('steady'))
+    assert.deepEqual(store.getState().runSource, { kind: 'virtual', scenarioId: 'steady' })
+    assert.deepEqual(calls, [])
+  })
+
+  test('실제 GPS를 요청하는 일반 시작은 차단 여부와 상관없이 같다', () => {
+    const { geo, store } = setupBlocked(false)
+    store.getState().start()
+    assert.deepEqual(store.getState().runSource, { kind: 'real' })
+    assert.equal(geo.watchCalls, 1)
   })
 })

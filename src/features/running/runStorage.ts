@@ -1,5 +1,7 @@
 import { clampDurationSec, getDefaultDurationSec, isGoalDistance, isValidDurationSec } from './goal.ts'
 import { isValidReflection } from './reflection.ts'
+import { normalizeSensorReport } from './postureSummary.ts'
+import type { RunGuidance } from './runGuidance.ts'
 import type { RunSessionData } from './runSession.ts'
 import type {
   DistanceSample,
@@ -70,6 +72,10 @@ export interface RunSessionSnapshot {
   readonly session: RunSessionData
   readonly distanceSamples: readonly DistanceSample[]
   readonly gpsGaps: readonly GpsGap[]
+  // 러닝 시작 시점의 안내 설정 스냅샷. 이 기능 이전에 만든 세션에는 없다(읽을 때는 getSessionGuidance가 기본값으로 처리한다).
+  readonly guidance?: RunGuidance
+  // 자동 일시정지로 멈춘 상태인가(수동 일시정지와 구분). 재개·종료하면 지운다. 없으면 수동(또는 복원) 일시정지이다.
+  readonly autoPaused?: boolean
 }
 
 export function createDefaultDraft(): RunDraft {
@@ -115,14 +121,14 @@ function isValidSplit(value: unknown): value is RunSplit {
   )
 }
 
-export function isRunRecord(value: unknown): value is RunRecord {
+// 러닝 기록 본체(거리·시간·목표 등)가 유효한가. 자세 요약(sensorReport)은 여기서 검사하지 않는다(검증 책임 분리).
+function isRunRecordBody(value: unknown): value is Omit<RunRecord, 'sensorReport'> & { readonly sensorReport?: unknown } {
   if (!isRecord(value)) return false
   if (typeof value.recordId !== 'string' || value.recordId === '') return false
   if (typeof value.sessionId !== 'string' || value.sessionId === '') return false
   if (value.mode !== 'gps' && value.mode !== 'time') return false
   if (!isFiniteNumber(value.startedAt) || !isFiniteNumber(value.endedAt)) return false
   if (!isValidGoal(value.goal) || !isStringOrNull(value.musicTrackId)) return false
-  if (value.sensorReport !== null) return false
   if (value.reflection !== null && !isValidReflection(value.reflection)) return false
 
   const result = value.result
@@ -141,9 +147,29 @@ export function isRunRecord(value: unknown): value is RunRecord {
   return result.completion !== 'time'
 }
 
+// 저장된 값을 기록으로 읽는다. 본체가 유효하면 기록을 보존하고, 자세 요약이 없거나 손상됐으면 그 요약만 null로 바꾼다.
+export function parseRunRecord(value: unknown): RunRecord | null {
+  if (!isRunRecordBody(value)) return null
+  return { ...value, sensorReport: normalizeSensorReport(value.sensorReport) }
+}
+
+// 본체와 자세 요약이 모두 유효한 기록인가(자세 요약이 손상된 기록은 false. 그런 기록도 parseRunRecord로는 읽힌다).
+// 주의: 운영 코드에서 저장된 기록을 거를 때 이 함수를 쓰면 손상된 자세 요약 때문에 정상 러닝 기록이 사라진다. 운영 코드는 parseRunRecord를 쓴다(이 함수는 검증 테스트용).
+export function isRunRecord(value: unknown): value is RunRecord {
+  if (!isRunRecordBody(value)) return false
+  return value.sensorReport === null || normalizeSensorReport(value.sensorReport) !== null
+}
+
 // ---------------------------------------------------------------------------
 // 저장소
 // ---------------------------------------------------------------------------
+
+function parseAll(items: readonly unknown[]): RunRecord[] {
+  return items.flatMap((item) => {
+    const record = parseRunRecord(item)
+    return record === null ? [] : [record]
+  })
+}
 
 function getBrowserStorage(): RunKeyValueStorage | null {
   try {
@@ -195,7 +221,7 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
 
   function loadRecords(): RunRecord[] {
     const data = read(RUN_STORAGE_KEYS.records)
-    return Array.isArray(data) ? data.filter(isRunRecord) : []
+    return Array.isArray(data) ? parseAll(data) : []
   }
 
   // 저장된 배열을 그대로(유효하지 않은 항목 포함) 읽는다. 없으면 [], 읽을 수 없거나 배열이 아니면 null.
@@ -216,7 +242,7 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
     if (storage === null) return { ok: false, reason: 'unavailable' }
     const items = readRawRecords()
     if (items === null) return { ok: false, reason: 'unreadable' }
-    return { ok: true, records: items.filter(isRunRecord) }
+    return { ok: true, records: parseAll(items) }
   }
 
   return {
@@ -250,7 +276,7 @@ export function createRunStorage(storage: RunKeyValueStorage | null = getBrowser
     saveRecord: (record) => {
       // 읽을 수 없는 항목도 그대로 남긴다(다른 기록을 지우지 않는다). 저장 데이터 전체를 읽을 수 없으면 새로 시작한다.
       const saved = readRawRecords() ?? []
-      const isSame = (item: unknown) => isRunRecord(item) && item.recordId === record.recordId
+      const isSame = (item: unknown) => parseRunRecord(item)?.recordId === record.recordId
       const index = saved.findIndex(isSame)
       // 같은 recordId는 첫 항목만 제자리에서 덮어쓴다(같은 id가 겹친 손상 데이터의 다른 항목을 건드리지 않는다). 새 기록은 끝에 추가한다.
       write(RUN_STORAGE_KEYS.records, index === -1 ? [...saved, record] : saved.map((item, i) => (i === index ? record : item)))
