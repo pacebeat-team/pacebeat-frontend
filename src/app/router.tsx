@@ -14,6 +14,7 @@ import { ResultPage as RunResultPage } from '../pages/running/ResultPage'
 import { ResultDetailsPage } from '../pages/running/ResultDetailsPage'
 import { ArrivalPage } from '../pages/running/ArrivalPage'
 import { RecordsPage } from '../pages/RecordsPage'
+import { RecordDetailPage } from '../pages/records/RecordDetailPage'
 import { GrowthPage } from '../pages/GrowthPage'
 import { MyPage } from '../pages/MyPage'
 import { SplashPage } from '../pages/SplashPage'
@@ -108,7 +109,10 @@ export const router = createBrowserRouter([
       },
       {
         path: 'records',
-        element: <RecordsPage />,
+        children: [
+          { index: true, element: <RecordsPage /> },
+          { path: ':recordId', element: <RecordDetailPage /> },
+        ],
       },
       {
         path: 'growth',

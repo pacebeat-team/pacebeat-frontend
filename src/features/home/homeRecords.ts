@@ -46,18 +46,24 @@ export interface HomeRecordsView {
   readonly runDays: readonly boolean[]
   // 지난 러닝 행의 값. 기록이 없으면 null(행을 숨긴다)
   readonly lastRunText: string | null
+  // 지난 러닝 행이 가리키는 기록(기록 상세로 연결). 행이 없으면 null
+  readonly lastRunRecordId: string | null
 }
 
 export const EMPTY_HOME_RECORDS: HomeRecordsView = Object.freeze({
   runDays: Object.freeze(Array.from({ length: 7 }, () => false)),
   lastRunText: null,
+  lastRunRecordId: null,
 })
 
 export function buildHomeRecordsView(records: readonly RunRecord[], now: Date): HomeRecordsView {
   // 지금보다 늦게 시작한 기록(시계 오류 등)은 요일 표시와 마찬가지로 지난 러닝으로 보지 않는다.
   const latest = getLatestRecord(records.filter((record) => record.startedAt <= now.getTime()))
+  const lastRunText = latest === null ? null : buildLastRunText(latest)
   return {
     runDays: getRunWeekdays(records, now),
-    lastRunText: latest === null ? null : buildLastRunText(latest),
+    lastRunText,
+    // 글자가 없는 행은 보이지 않으므로 연결할 기록도 없다.
+    lastRunRecordId: lastRunText === null ? null : (latest?.recordId ?? null),
   }
 }

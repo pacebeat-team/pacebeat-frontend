@@ -3,7 +3,7 @@ import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { formatPace } from '../../features/running/format'
 import { REFLECTION_MEMO_MAX } from '../../features/running/reflection'
 import { runResultStore, useRunResultStore } from '../../features/running/runResultStore'
-import type { RunSplit } from '../../features/running/types'
+import type { ReflectionDifficulty, ReflectionReason, RunReflection, RunSplit } from '../../features/running/types'
 import { DIFFICULTY_OPTIONS, REASON_OPTIONS, useSaveAndGo } from './resultHooks'
 
 // 결과 화면 공용 조각(#47). Figma `RESULT / *` 의 같은 요소를 한 번만 만든다.
@@ -84,10 +84,57 @@ export function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-// 회고 시트(Figma `RESULT / Reflection sheet`). 저장해야만 반영하고, 닫기·바깥 탭은 반영하지 않는다.
+// 결과 화면의 리포트 시트: 결과 입력 상태(store)에 연결한다.
 export function ReflectionSheet() {
   const open = useRunResultStore((state) => state.sheetOpen)
   const draft = useRunResultStore((state) => state.draft)
+  const api = runResultStore.getState()
+  return (
+    <ReflectionSheetView
+      open={open}
+      draft={draft}
+      subtitle="오늘의 러닝 리포트"
+      onClose={api.closeSheet}
+      onDifficulty={api.setDraftDifficulty}
+      onToggleReason={api.toggleDraftReason}
+      onMemo={api.setDraftMemo}
+      onSave={api.applySheet}
+    />
+  )
+}
+
+export interface ReflectionSheetViewProps {
+  open: boolean
+  draft: RunReflection
+  subtitle: string
+  // 저장 실패 안내 등 저장 버튼 위에 보일 문구
+  error?: string | null
+  saving?: boolean
+  onClose: () => void
+  onDifficulty: (difficulty: ReflectionDifficulty) => void
+  onToggleReason: (reason: ReflectionReason) => void
+  onMemo: (memo: string) => void
+  onSave: () => void
+}
+
+// 리포트 시트(Figma `RESULT / Reflection sheet`, `RECORD / Reflection`). 저장해야만 반영하고, 닫기·바깥 탭은 반영하지 않는다.
+export function ReflectionSheetView({
+  open,
+  draft,
+  subtitle,
+  error = null,
+  saving = false,
+  onClose,
+  onDifficulty,
+  onToggleReason,
+  onMemo,
+  onSave,
+}: ReflectionSheetViewProps) {
+  // 닫기 함수가 바뀌어도 열려 있는 동안의 포커스 가두기·inert 처리를 다시 하지 않도록 ref로 최신 값을 쓴다.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
   const ref = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -106,10 +153,20 @@ export function ReflectionSheet() {
         }
       }
     }
+    // 시트가 <main> 안에 있으면 main 밖의 하단 내비게이션도 뒤 화면이므로 함께 제외한다.
+    const main = wrapper?.closest('main')
+    if (main?.parentElement) {
+      for (const sibling of Array.from(main.parentElement.children)) {
+        if (sibling !== main && sibling instanceof HTMLElement && !sibling.hasAttribute('inert')) {
+          sibling.setAttribute('inert', '')
+          dimmed.push(sibling)
+        }
+      }
+    }
     ref.current?.focus()
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        runResultStore.getState().closeSheet()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || ref.current === null) return
@@ -137,13 +194,12 @@ export function ReflectionSheet() {
   }, [open])
 
   if (!open) return null
-  const api = runResultStore.getState()
   return (
     <div ref={wrapperRef} className="absolute inset-0 z-[60] flex flex-col justify-end">
       <button
         type="button"
         aria-label="리포트 닫기"
-        onClick={() => api.closeSheet()}
+        onClick={onClose}
         className="absolute inset-0 cursor-default bg-ink/[0.32]"
       />
       <div
@@ -156,7 +212,7 @@ export function ReflectionSheet() {
       >
         <div className="mx-auto h-1 w-9 shrink-0 rounded-full bg-line" />
         <h2 className="mt-5 text-[28px] font-medium leading-9">오늘 러닝 리포트</h2>
-        <p className="mt-1 text-[14px] leading-5 text-muted">오늘의 러닝 리포트</p>
+        <p className="mt-1 text-[14px] leading-5 text-muted">{subtitle}</p>
 
         <p className="mt-6 text-[16px] font-medium leading-[22px]">체감 난이도</p>
         <div role="radiogroup" aria-label="체감 난이도" className="mt-3 flex h-[44px] w-full gap-3">
@@ -166,7 +222,7 @@ export function ReflectionSheet() {
               type="button"
               role="radio"
               aria-checked={draft.difficulty === option.value}
-              onClick={() => api.setDraftDifficulty(option.value)}
+              onClick={() => onDifficulty(option.value)}
               className={`flex h-[44px] min-w-0 flex-1 cursor-pointer items-center justify-center rounded-full text-[14px] font-medium leading-5 ${
                 draft.difficulty === option.value ? 'bg-lime' : 'bg-soft'
               }`}
@@ -185,7 +241,7 @@ export function ReflectionSheet() {
                 key={option.value}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => api.toggleDraftReason(option.value)}
+                onClick={() => onToggleReason(option.value)}
                 className={`flex h-[44px] min-w-0 flex-1 cursor-pointer items-center justify-center whitespace-nowrap rounded-full text-[14px] font-medium leading-5 ${
                   selected ? 'bg-lime' : 'bg-soft'
                 }`}
@@ -203,15 +259,20 @@ export function ReflectionSheet() {
           id="reflection-memo"
           value={draft.memo}
           maxLength={REFLECTION_MEMO_MAX}
-          onChange={(event) => api.setDraftMemo(event.target.value)}
+          onChange={(event) => onMemo(event.target.value)}
           placeholder="오늘의 페이스를 기억해요."
           className="mt-3 h-[72px] w-full resize-none rounded-2xl bg-soft p-4 text-[16px] leading-6 text-ink outline-none placeholder:text-muted/70"
         />
         <p className="mt-[6px] text-right text-[13px] leading-[18px] text-muted" aria-live="polite">
           {draft.memo.length} / {REFLECTION_MEMO_MAX}
         </p>
+        {error !== null && (
+          <p role="alert" className="mt-3 text-[13px] leading-[18px] text-muted">
+            {error}
+          </p>
+        )}
         <div className="mt-5">
-          <PrimaryButton label="저장" onClick={() => api.applySheet()} />
+          <PrimaryButton label="저장" disabled={saving} onClick={onSave} />
         </div>
       </div>
     </div>
