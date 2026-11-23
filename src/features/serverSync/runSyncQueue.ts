@@ -160,6 +160,12 @@ export function createRunSyncQueue(deps: { readonly storage: QueueStorage | null
     resumeAfterAuth(): void {
       if (read().some((q) => q.status === 'auth-wait')) write(read().map((q) => (q.status === 'auth-wait' ? { ...q, status: 'pending' as const, nextAttemptAt: 0 } : q)))
     },
+    // 아직 서버에 가지 못한 항목의 회고를 최신 값으로 바꾼다(회고를 고친 뒤 전송된 요청이 오래된 값을 싣지 않게). 대기열에 없으면 false.
+    updateReflection(clientSessionId: string, reflection: RunCreateRequest['reflection']): boolean {
+      if (!read().some((q) => q.clientSessionId === clientSessionId)) return false
+      write(read().map((q) => (q.clientSessionId === clientSessionId ? { ...q, request: { ...q.request, reflection } } : q)))
+      return true
+    },
     // 거절된 항목을 사용자가 포기하거나 고친 뒤 대기열에서 뺀다. 로컬 러닝 기록은 지우지 않는다.
     remove(clientSessionId: string): void {
       write(read().filter((q) => q.clientSessionId !== clientSessionId))

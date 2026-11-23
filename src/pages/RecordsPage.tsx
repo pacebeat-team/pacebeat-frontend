@@ -9,6 +9,7 @@ import {
   type RecordRowView,
 } from '../features/records/recordsView'
 import { createRecordsLoader } from '../features/records/recordsLoad'
+import { RUNS_CHANGED_EVENT } from '../features/records/recordsEvents'
 import { RUN_PATHS } from '../features/running/runFlow'
 import { createRunStorage, RUN_STORAGE_KEYS, type RecordsReadResult } from '../features/running/runStorage'
 import { LoadingCard, StateCard } from './records/StateCard'
@@ -144,8 +145,13 @@ export function RecordsPage() {
     const onStorage = (event: StorageEvent) => {
       if (event.key === null || event.key === RUN_STORAGE_KEYS.records) loader.load()
     }
+    const onChanged = () => loader.load()
     window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
+    window.addEventListener(RUNS_CHANGED_EVENT, onChanged) // 서버에서 가져온 기록이 추가되면 다시 읽는다
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener(RUNS_CHANGED_EVENT, onChanged)
+    }
   }, [loader])
 
   let body

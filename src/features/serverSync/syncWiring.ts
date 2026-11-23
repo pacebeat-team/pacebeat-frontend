@@ -8,7 +8,11 @@ import { profileStore } from '../profile/profileStore.ts'
 import { runResultStore } from '../running/runResultStore.ts'
 import { createRunStorage } from '../running/runStorage.ts'
 import { deriveRecordId } from '../running/record.ts'
-import { baselineRequestFromMetrics, createSyncRuntime } from './syncRuntime.ts'
+import { baselineRequestFromMetrics } from './baselineMapper.ts'
+import { toReflectionPayload } from './runMapper.ts'
+import { createSyncRuntime } from './syncRuntime.ts'
+import { notifyRunsChanged, REFLECTION_SAVED_EVENT } from '../records/recordsEvents.ts'
+import type { RunReflection } from '../running/types.ts'
 
 // 앱 시작 때 한 번 연결한다(main.tsx가 App보다 먼저 불러온다). api가 null이거나 로그인하지 않았으면 아무 일도 하지 않는다.
 function browserStorage(): Storage | null {
@@ -23,6 +27,15 @@ export const syncRuntime = createSyncRuntime({
   getApi: () => api,
   isSignedIn: () => auth.getState().status === 'signedIn',
   queueStorage: browserStorage(),
+  getLocalProfile: () => {
+    const p = profileStore.getState()
+    const o = useOnboardingStore.getState()
+    return { profile: p.profile, consent: p.consent, completedAt: p.completedAt, experienceLevel: o.experienceLevel, weeklyRuns: o.weeklyRuns }
+  },
+  applyProfilePatch: (patch) => profileStore.getState().setProfile(patch),
+  loadLocalRecords: () => createRunStorage().loadRecords(),
+  saveLocalRecord: (record) => createRunStorage().saveRecord(record),
+  onRunsChanged: notifyRunsChanged,
 })
 
 const stops: Array<() => void> = []
@@ -39,24 +52,38 @@ stops.push(
   }),
 )
 
-// 프로필: 가입 완료 시각이 기록되면(처음 완료) 한 번 보낸다. 입력하지 않은 값은 null 그대로 보낸다.
+// 프로필: 가입 완료 시각이 처음 기록될 때, 그리고 완료한 뒤 프로필을 고칠 때마다(1.5초 모아서) 보낸다. 입력하지 않은 값은 null 그대로 보낸다.
+// 실패하면 대기 작업으로 남아 앱 시작·로그인·온라인 복구 때 다시 보낸다.
 let wasProfileDone = profileStore.getState().completedAt !== null
+let lastProfileJson = JSON.stringify(profileStore.getState().profile)
+let profileTimer: ReturnType<typeof setTimeout> | null = null
 stops.push(
   profileStore.subscribe((state) => {
     const done = state.completedAt !== null
-    if (done && !wasProfileDone) {
-      const onboarding = useOnboardingStore.getState()
-      void syncRuntime.syncProfile({
-        profile: state.profile,
-        consent: state.consent,
-        completedAt: state.completedAt,
-        experienceLevel: onboarding.experienceLevel,
-        weeklyRuns: onboarding.weeklyRuns,
-      })
-    }
+    const json = JSON.stringify(state.profile)
+    const changed = json !== lastProfileJson
+    const justCompleted = done && !wasProfileDone
     wasProfileDone = done
+    lastProfileJson = json
+    if (!done || (!justCompleted && !changed)) return
+    if (profileTimer !== null) clearTimeout(profileTimer)
+    profileTimer = setTimeout(() => void syncRuntime.syncProfile(), justCompleted ? 0 : 1500)
   }),
 )
+stops.push(() => {
+  if (profileTimer !== null) clearTimeout(profileTimer)
+})
+
+// 기록 상세에서 회고를 고쳤을 때: 서버에도 반영한다(아직 서버에 없으면 대기열의 요청에 최신 회고를 싣는다).
+const onReflectionSaved = (event: Event) => {
+  const detail = (event as CustomEvent<{ sessionId: string; reflection: RunReflection | null }>).detail
+  const payload = detail.reflection === null ? { difficulty: null, reasons: [], memo: '' } : toReflectionPayload(detail.reflection)
+  void syncRuntime.syncReflection(detail.sessionId, payload)
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener(REFLECTION_SAVED_EVENT, onReflectionSaved)
+  stops.push(() => window.removeEventListener(REFLECTION_SAVED_EVENT, onReflectionSaved))
+}
 
 // 기초 측정: 완료 표시가 처음 true가 될 때 측정값으로 보낸다(기준 페이스는 기존 computeBaselinePace).
 let wasBaselineDone = useOnboardingStore.getState().baselineMeasurementCompleted

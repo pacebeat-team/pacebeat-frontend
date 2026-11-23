@@ -15,6 +15,7 @@ import {
 import { getVisibleRecords } from '../../features/records/recordsView'
 import { findRecord } from '../../features/running/recordQueries'
 import { createRunStorage, type RecordsReadResult } from '../../features/running/runStorage'
+import { notifyReflectionSaved } from '../../features/records/recordsEvents'
 import type { RunRecord, RunReflection } from '../../features/running/types'
 import { ReflectionSheetView } from '../running/ResultShared'
 import { StateCard } from './StateCard'
@@ -154,6 +155,7 @@ export function RecordDetailPage() {
     try {
       const next = withReflection(record, draft)
       createRunStorage().saveRecord(next)
+      notifyReflectionSaved({ sessionId: next.sessionId, reflection: next.reflection })
       setUpdated(next)
       setSheetOpen(false)
     } catch {
