@@ -62,3 +62,23 @@ describe('준비 확인 화면 문구와 버튼 상태', () => {
     assert.deepEqual(getReadyActions(null), { startDisabled: true, timeEmphasized: false })
   })
 })
+
+describe('위치 사용 불가 원인별 문구 연결', () => {
+  // 원인별 문구는 미확정이라 세 원인이 지금 화면의 문구를 같이 가리킨다. 문구표가 오면 이 기대값만 원인별로 바꾼다.
+  test('비보안·미지원·거부 모두 기존 문구가 연결되고 원인은 값으로 구분된다', () => {
+    for (const reason of ['insecure-context', 'unsupported', 'denied'] as const) {
+      assert.deepEqual(describeLocationReadiness({ available: false, reason }), {
+        status: '사용할 수 없어요',
+        detail: '시간만 기록할 수 있어요.',
+      })
+    }
+  })
+  test('사용 가능·확인 중·사용 불가 문구는 서로 구분된다', () => {
+    const texts = [
+      describeLocationReadiness(null),
+      describeLocationReadiness({ available: true }),
+      describeLocationReadiness({ available: false, reason: 'denied' }),
+    ].map((row) => row.status)
+    assert.equal(new Set(texts).size, 3)
+  })
+})

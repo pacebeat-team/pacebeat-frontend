@@ -52,12 +52,22 @@ export interface LocationRowText {
   readonly detail: string
 }
 
+// 사용 불가 원인별 준비 화면 문구. 원인(비보안·미지원·거부)은 코드로 이미 구분되어 있지만, 원인별 문구는 아직 확정되지 않았다.
+// 그래서 세 원인 모두 현재 화면의 문구를 그대로 가리킨다. 디자인 문구표가 오면 이 표의 값만 바꾼다.
+// TODO: 사용 불가 문구는 임시 문구(디자인 확인 필요)
+const UNAVAILABLE_ROW_TEXT: Readonly<Record<LocationUnavailableReason, LocationRowText>> = {
+  'insecure-context': { status: '사용할 수 없어요', detail: '시간만 기록할 수 있어요.' },
+  unsupported: { status: '사용할 수 없어요', detail: '시간만 기록할 수 있어요.' },
+  // 'permission-denied'는 엔진 쪽 이름이고, 이 화면의 권한 조회는 'denied'를 쓴다. 지금은 둘 다 같은 문구이다.
+  'permission-denied': { status: '사용할 수 없어요', detail: '시간만 기록할 수 있어요.' },
+  denied: { status: '사용할 수 없어요', detail: '시간만 기록할 수 있어요.' },
+}
+
 // 확인 중이면(null) 사용 가능으로 단정하지 않는다.
 export function describeLocationReadiness(readiness: LocationReadiness | null): LocationRowText {
   if (readiness === null) return { status: '확인 중', detail: '위치 상태를 확인하고 있어요.' }
   if (readiness.available) return { status: '양호', detail: '거리와 페이스를 기록할 수 있어요.' }
-  // TODO: 사용 불가 문구는 임시 문구(디자인 확인 필요)
-  return { status: '사용할 수 없어요', detail: '시간만 기록할 수 있어요.' }
+  return UNAVAILABLE_ROW_TEXT[readiness.reason]
 }
 
 export interface ReadyActions {

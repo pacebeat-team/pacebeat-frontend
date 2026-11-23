@@ -15,16 +15,8 @@ import {
   getProgressRatio,
   PLACEHOLDER,
 } from '../../features/measurementView/format'
-import type { GpsStatus } from '../../features/measurementView/types'
+import { describeActiveGps, describeRestoreHint } from '../../features/measurementView/activeCopy'
 import { useAttachRestoredSession, useMeasurementView, useStopOnLeave } from '../../features/measurementView/useMeasurementView'
-
-// TODO: Figma에는 "GPS 양호"만 디자인되어 있다. 나머지 상태의 문구는 임시이며 디자인 확인이 필요하다.
-const GPS_LABELS: Record<GpsStatus, string> = {
-  good: '양호',
-  weak: '약함',
-  lost: '끊김',
-  unavailable: '사용 불가',
-}
 
 export function ActivePage() {
   const navigate = useNavigate()
@@ -66,7 +58,7 @@ export function ActivePage() {
             {isVirtual && ' · 가상 데이터'}
           </p>
           <p className="text-[13px] leading-5 text-ink">
-            GPS {active.gpsStatus ? GPS_LABELS[active.gpsStatus] : PLACEHOLDER}
+            GPS {describeActiveGps(active.gpsStatus) ?? PLACEHOLDER}
           </p>
         </div>
 
@@ -142,7 +134,7 @@ export function ActivePage() {
         {restore && (
           <>
             <p className="px-4 pb-2 text-[13px] leading-5 text-ink">
-              {restore.canResume ? 'GPS가 확인됐어요. 이어서 달릴 수 있어요.' : 'GPS가 확인되면 이어갈 수 있어요.'}
+              {describeRestoreHint(restore.canResume)}
             </p>
             <PrimaryButton label="측정 이어가기" disabled={!restore.canResume} onClick={actions.resume} />
           </>
