@@ -222,6 +222,7 @@ function setup(options: { storage?: StorageLike } = {}) {
   const clock = new ManualClock(BASE)
   const fake = createFakeGeolocation(clock)
   const store = createMeasurementStore({
+    allowVirtual: true,
     clock,
     storage: options.storage ?? null,
     realEnv: () => ({ isSecureContext: true, geolocation: fake.geolocation }),
@@ -293,7 +294,7 @@ describe('startBaselineCompletionSync (Store 연결)', () => {
       { session: pauseSession(runningSession(), BASE + 150_000), metrics: metricsWith(BASELINE_MIN_VALID_MS * 2) },
       BASE + 150_000,
     )
-    const store = createMeasurementStore({ clock: new ManualClock(BASE + 160_000), storage })
+    const store = createMeasurementStore({ allowVirtual: true, clock: new ManualClock(BASE + 160_000), storage })
     const onboarding = createFakeOnboarding()
     startBaselineCompletionSync(store, onboarding)
     store.getState().hydrate()
@@ -355,7 +356,7 @@ describe('startBaselineCompletionSync (Store 연결)', () => {
 
   test('가상 측정은 유효 시간이 120초를 넘어도 기록하지 않는다', () => {
     const clock = new ManualClock(BASE)
-    const store = createMeasurementStore({ clock, storage: null })
+    const store = createMeasurementStore({ allowVirtual: true, clock, storage: null })
     const onboarding = createFakeOnboarding()
     startBaselineCompletionSync(store, onboarding)
     store.getState().start({ virtual: 'steady' })

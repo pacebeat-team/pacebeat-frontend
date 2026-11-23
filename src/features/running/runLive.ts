@@ -6,6 +6,10 @@ import type { GpsSource, GpsSourceHandlers } from '../measurement/geolocationSou
 import { applyGpsError, getGpsStatus, processFix } from '../measurement/gpsTracker.ts'
 import { createSessionId } from '../measurement/session.ts'
 import type { GpsErrorReason, RawFix } from '../measurement/types.ts'
+import { haversineMeters } from '../measurement/geo.ts'
+import { feedAutoPause, INITIAL_AUTO_PAUSE } from './autoPause.ts'
+import type { AutoPauseState } from './autoPause.ts'
+import { getSessionGuidance } from './runGuidance.ts'
 import { isGoalReached } from './policy.ts'
 import { createGpsRunState, feedGpsFix, getGpsRunMetrics, getTimeRunMetrics } from './runMetrics.ts'
 import type { GpsRunState, RunLiveMetrics } from './runMetrics.ts'
@@ -14,6 +18,7 @@ import type { RunEndReason } from './runSession.ts'
 import { runStore } from './runStore.ts'
 import type { RunStoreState } from './runStore.ts'
 import type { RunMode } from './types.ts'
+import type { RunGuidance } from './runGuidance.ts'
 
 // 러닝 실행 중 상태(저장하지 않는 값)와 위치 수집 연결.
 // - 세션·목표·거리 샘플·GPS 끊김 구간은 runStore가 가진다(진행 중에는 메모리에만 있다). 여기서는 좌표 검증 상태(tracker)·누적 거리(metrics)·현재 시각만 가진다.
@@ -94,6 +99,14 @@ export function createRunLive(deps: RunLiveDeps = {}) {
   let permission: GpsPermission = 'unknown'
   // 이번 준비·세션에서 위치(좌표) 신호를 한 번이라도 받았다 = 권한이 허용됐다.
   let gotSignal = false
+  // 자동 일시정지 판정 상태(저장하지 않는다). 직전 판정 좌표와 연속 정지 구간.
+  let autoPause: AutoPauseState = INITIAL_AUTO_PAUSE
+  let autoPauseFix: { lat: number; lng: number } | null = null
+
+  function resetAutoPause(): void {
+    autoPause = INITIAL_AUTO_PAUSE
+    autoPauseFix = null
+  }
 
   // 위치를 쓸 수 없어 시작하지 못한다고 알린다(세션 시작 전에만).
   function failPrepare(reason: GpsErrorReason): void {
@@ -132,6 +145,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     // 처음 좌표를 기다리는 동안(status null, 거리 없음)은 끊긴 것이 아니다. 거리를 쌓은 뒤의 검색 중은 끊김이다.
     const lost = status === 'lost' || status === 'unavailable' || (status === null && active.distanceSamples.length > 0)
     if (!lost) return
+    resetAutoPause()
     const last = active.gpsGaps[active.gpsGaps.length - 1]
     if (last !== undefined && last.recoveredAtMs === null) return
     const lostAt = status === 'lost' && tracker.anchor !== null ? tracker.anchor.at : now
@@ -153,7 +167,11 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     syncGaps(fix.receivedAt)
     const fed = feedGpsFix(live.getState().gps, fix, session)
     live.setState({ gps: fed.state })
-    if (!fed.result.accepted) return
+    if (!fed.result.accepted) {
+      // 정확도 저하·오래된 좌표 등으로 거절된 좌표는 정지 판단에 쓰지 않고 타이머를 지운다.
+      resetAutoPause()
+      return
+    }
     // 유효 좌표를 받았으면 열려 있던 끊김 구간을 복구 시각으로 닫는다.
     runs.getState().closeGpsGap(elapsedAt(fed.result.fix.at))
     const metrics = getGpsRunMetrics(fed.state, session, fed.result.fix.at)
@@ -162,10 +180,39 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     if (isGoalReached('gps', active.goal, distanceM)) {
       // 목표 도달: 한 번만 종료한다(종료 후에는 status가 running이 아니므로 다시 오지 않는다).
       stopRunInternal(fed.result.fix.at, 'goal')
+      return
+    }
+    judgeAutoPause(active.session.id, fed.result.fix)
+  }
+
+  // 유효 좌표 한 개로 자동 일시정지를 판정한다. 세션에 고정된 설정이 켜져 있고 GPS 진행 중일 때만 한다.
+  function judgeAutoPause(sessionId: string, fix: { lat: number; lng: number; at: number; connected: boolean }): void {
+    const active = runs.getState().activeSession
+    if (active === null || active.session.id !== sessionId || active.mode !== 'gps' || active.session.status !== 'running') {
+      resetAutoPause()
+      return
+    }
+    if (!getSessionGuidance(active).autoPause) {
+      resetAutoPause()
+      return
+    }
+    const gap = active.gpsGaps[active.gpsGaps.length - 1]
+    const lost = gap !== undefined && gap.recoveredAtMs === null
+    const distance =
+      fix.connected && autoPauseFix !== null ? haversineMeters(autoPauseFix.lat, autoPauseFix.lng, fix.lat, fix.lng) : null
+    autoPauseFix = { lat: fix.lat, lng: fix.lng }
+    const step = feedAutoPause(autoPause, fix.at, lost ? null : distance, fix.connected && !lost)
+    autoPause = step.state
+    if (step.pause) {
+      runs.getState().autoPauseRun(fix.at)
+      resetAutoPause()
+      live.setState({ now: clock() })
+      stopMonitoring()
     }
   }
 
   function handleError(reason: GpsErrorReason): void {
+    resetAutoPause()
     live.setState(({ gps }) => ({ gps: { ...gps, tracker: applyGpsError(gps.tracker, reason) } }))
     const active = runs.getState().activeSession
     const unavailable = reason === 'permission-denied' || reason === 'insecure-context' || reason === 'unsupported'
@@ -203,6 +250,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     live.setState({ now })
     const active = runs.getState().activeSession
     if (active !== null && active.mode === 'gps' && active.session.status === 'running') {
+      resetAutoPause()
       stopSource()
       startSource()
     }
@@ -210,6 +258,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
   }
 
   function stopRunInternal(now: number, reason: RunEndReason): void {
+    resetAutoPause()
     runs.getState().stopRun(now, reason)
     stopSource()
     stopMonitoring()
@@ -247,12 +296,14 @@ export function createRunLive(deps: RunLiveDeps = {}) {
       live.setState({ gps: createGpsRunState(), now: clock() })
     },
     // 세션을 시작한다. GPS는 prepare에서 시작한 수집을 이어 쓰고, TIME은 위치 수집이 없다.
-    begin(mode: RunMode): void {
+    // guidance: 시작 시점의 안내 설정(세션에 고정된다).
+    begin(mode: RunMode, guidance?: RunGuidance): void {
       const now = clock()
       // 시작한 뒤에는 준비 단계의 늦은 권한 응답이 영향을 주지 못하게 한다.
       prepareId += 1
       onUnavailable = null
-      runs.getState().startRun(mode, now, createId)
+      resetAutoPause()
+      runs.getState().startRun(mode, now, createId, guidance)
       live.setState({ now })
       if (mode === 'time') stopSource()
       else if (source === null || !source.isRunning) {
@@ -264,6 +315,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     },
     pause(): void {
       const now = clock()
+      resetAutoPause()
       runs.getState().pauseRun(now)
       live.setState({ now })
       stopMonitoring()
@@ -272,6 +324,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     resume(): void {
       const now = clock()
       const active = runs.getState().activeSession
+      resetAutoPause()
       runs.getState().resumeRun(now)
       live.setState({ now })
       if (active !== null && active.mode === 'gps' && (source === null || !source.isRunning)) {

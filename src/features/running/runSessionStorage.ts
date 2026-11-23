@@ -1,5 +1,6 @@
 import { isGoalDistance } from './goal.ts'
 import { isValidReflection } from './reflection.ts'
+import { normalizeRunGuidance } from './runGuidance.ts'
 import { RunStorageError } from './runStorage.ts'
 import type { RunKeyValueStorage, RunSessionSnapshot } from './runStorage.ts'
 import type { RunReflection } from './types.ts'
@@ -150,7 +151,12 @@ export function createRunSessionStorage(storage: RunKeyValueStorage | null): Run
       if (read.kind !== 'ok') return { status: read.kind }
       const data = read.data
       if (!isObject(data) || !isNum(data.updatedAt) || !isValidSnapshot(data.snapshot)) return { status: 'corrupt' }
-      return { status: 'ok', value: { updatedAt: data.updatedAt, snapshot: data.snapshot } }
+      // 안내 설정 스냅샷은 있을 때만 검증해 정리한다(손상되면 항목별 기본값). 스냅샷이 없는 이전 세션은 그대로 둔다. 어느 쪽이든 세션 자체는 복원한다.
+      const snapshot = data.snapshot.guidance === undefined ? data.snapshot : { ...data.snapshot, guidance: normalizeRunGuidance(data.snapshot.guidance) }
+      // 자동 일시정지 표시는 일시정지 상태의 불리언일 때만 인정한다(그 밖에는 버린다).
+      const { autoPaused, ...rest } = snapshot
+      const keepAuto = autoPaused === true && snapshot.session.status === 'paused' && snapshot.mode === 'gps'
+      return { status: 'ok', value: { updatedAt: data.updatedAt, snapshot: keepAuto ? { ...rest, autoPaused: true } : rest } }
     },
     saveSession: (snapshot, now) => write(RUN_SESSION_KEYS.session, { updatedAt: now, snapshot }),
     removeSession: () => remove(RUN_SESSION_KEYS.session),

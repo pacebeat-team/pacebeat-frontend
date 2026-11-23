@@ -19,15 +19,18 @@ import type { LocationReadiness } from '../../features/running/locationReadiness
 import { findMusicTrack, formatTrackBpm } from '../../features/running/music'
 import { RUN_PATHS } from '../../features/running/runFlow'
 import { runSetupStore } from '../../features/running/runSetupStore'
+import { useGuidanceSettings } from '../../features/my/guidanceSettingsStore'
 import { useRunStore } from '../../features/running/runStore'
 import type { RunMode } from '../../features/running/types'
 import { RunFooter } from './RunFooter'
 
 // Figma `RUN / Ready`. 위치(GPS) 항목만 실제 확인 결과를 보여 준다.
-// 이어폰·음성 안내·스마트 인솔은 Figma 문구를 그대로 쓰는 정적 표시이다(실제 기기 상태가 아니다. 후속 Issue에서 연결).
+// 음성 안내는 저장된 안내 설정(켜짐/꺼짐)을 보여 준다. 켜짐 문구는 Figma 그대로이고, 꺼짐 문구는 Figma에 없어 같은 형식의 임시 문구이다(docs/unconfirmed-copy.md).
+// 이어폰·스마트 인솔은 Figma 문구를 그대로 쓰는 정적 표시이다(실제 기기 상태가 아니다. 후속 Issue에서 연결).
 export function ReadyPage() {
   const navigate = useNavigate()
   const draft = useRunStore((state) => state.draft)
+  const voiceGuide = useGuidanceSettings((state) => state.voiceGuide)
   const [readiness, setReadiness] = useState<LocationReadiness | null>(null)
 
   // 화면에 들어올 때 위치 사용 가능 여부를 확인한다(권한 요청은 하지 않는다).
@@ -57,7 +60,7 @@ export function ReadyPage() {
   const rows: readonly { title: string; icon: string; detail: string }[] = [
     { title: 'GPS 신호', icon: signal, detail: `${location.status} · ${location.detail}` },
     { title: '이어폰과 볼륨', icon: headphones, detail: '연결됨 · 볼륨 60%' },
-    { title: '음성 안내', icon: volume2, detail: '켜짐 · 진동은 이 기기에서 지원하지 않아요.' },
+    { title: '음성 안내', icon: volume2, detail: `${voiceGuide ? '켜짐' : '꺼짐'} · 진동은 이 기기에서 지원하지 않아요.` },
     { title: '스마트 인솔', icon: footprint, detail: '연결 안 됨 · 인솔 없이도 달릴 수 있어요.' },
   ]
 

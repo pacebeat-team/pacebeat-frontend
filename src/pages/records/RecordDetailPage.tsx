@@ -73,23 +73,23 @@ function SplitTable({ view }: { view: RecordDetailView }) {
         view.splitRows.length > 0 && (
           <div className="mt-3 flex flex-col">
             <div aria-hidden="true" className="flex h-6 gap-3 text-[13px] leading-[18px] text-muted">
-              <p className="w-[126px] shrink-0">구간</p>
-              <p className="w-[90px] shrink-0 text-right">시간</p>
-              <p className="w-[102px] shrink-0 text-right">페이스 /km</p>
+              <p className="w-[126px] min-w-0">구간</p>
+              <p className="w-[90px] min-w-0 text-right">시간</p>
+              <p className="w-[102px] min-w-0 text-right">페이스 /km</p>
             </div>
             <ul aria-label="구간 기록">
               {view.splitRows.map((row) => (
                 <li key={row.key} className="flex h-[44px] items-center gap-3">
-                  <p className="w-[126px] shrink-0 text-[14px] leading-5 text-muted">{row.label}</p>
-                  <p className="w-[90px] shrink-0 text-right text-[20px] leading-7">{row.timeText}</p>
-                  <p className="w-[102px] shrink-0 text-right text-[16px] leading-6 text-muted">{row.paceText}</p>
+                  <p className="w-[126px] min-w-0 text-[14px] leading-5 text-muted">{row.label}</p>
+                  <p className="w-[90px] min-w-0 text-right text-[20px] leading-7">{row.timeText}</p>
+                  <p className="w-[102px] min-w-0 text-right text-[16px] leading-6 text-muted">{row.paceText}</p>
                 </li>
               ))}
             </ul>
             {view.total !== null && (
               <div className="mt-[10px] flex h-7 items-center gap-3">
-                <p className="w-[240px] shrink-0 text-[13px] font-medium leading-5 text-muted">{view.total.label}</p>
-                <p className="w-[90px] shrink-0 text-right text-[16px] font-medium leading-6">{view.total.timeText}</p>
+                <p className="w-[240px] min-w-0 text-[13px] font-medium leading-5 text-muted">{view.total.label}</p>
+                <p className="w-[90px] min-w-0 text-right text-[16px] font-medium leading-6">{view.total.timeText}</p>
               </div>
             )}
           </div>

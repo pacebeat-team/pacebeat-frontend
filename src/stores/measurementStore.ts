@@ -23,6 +23,7 @@ import type {
 import { isGpsReadyToResume } from '../features/measurement/restore.ts'
 import { getBrowserStorage, loadMeasurement, saveMeasurement } from '../features/measurement/sessionPersistence.ts'
 import type { StorageLike } from '../features/measurement/sessionPersistence.ts'
+import { isDevBuild } from '../lib/devEnv.ts'
 import { createVirtualGeolocation, SYSTEM_CLOCK } from '../features/measurement/virtualGeolocation.ts'
 import type { VirtualClock } from '../features/measurement/virtualGeolocation.ts'
 import { VIRTUAL_SCENARIOS } from '../features/measurement/virtualScenarios.ts'
@@ -100,6 +101,8 @@ export interface MeasurementDeps {
   readonly realEnv?: () => GeolocationEnv
   // 실제 GPS 측정을 저장할 곳. 없으면 저장하지 않는다. (앱은 localStorage, 테스트는 가짜)
   readonly storage?: StorageLike | null
+  // 가상 GPS를 시작할 수 있는가. 기본값은 개발 빌드 여부(isDevBuild)이다. false이면 start({ virtual })가 와도 가상 공급원을 만들지 않고 실제 GPS로 시작한다.
+  readonly allowVirtual?: boolean
 }
 
 const TICK_MS = 500
@@ -123,7 +126,7 @@ export function parseVirtualParam(search: string): VirtualScenarioId | null {
 }
 
 // 주소에서 읽는 개발·시연용 모드.
-// - ?virtual=steady|stop-and-go|gps-lost|gps-glitch : 가상 GPS로 측정한다. 개발과 배포 환경 모두에서 동작한다.
+// - ?virtual=steady|stop-and-go|gps-lost|gps-glitch : 가상 GPS로 측정한다. 개발 환경(isDev)에서만 켜진다. 배포 환경에서는 무시한다.
 //   값 없이 ?virtual이면 steady. 모르는 값이면 가상 모드를 켜지 않는다(실제 GPS).
 // - ?scenario=... : Mock(예시) 데이터. 개발 환경(isDev)에서만 켜진다. ?virtual이 함께 있으면 ?virtual이 우선한다.
 export interface UrlMode {
@@ -132,7 +135,8 @@ export interface UrlMode {
 }
 
 export function parseUrlMode(search: string, isDev: boolean): UrlMode {
-  const virtual = parseVirtualParam(search)
+  // 가상 GPS도 Mock과 같이 개발 환경에서만 켠다. 배포 환경에서는 주소에 ?virtual이 있어도 무시한다(실제 GPS).
+  const virtual = isDev ? parseVirtualParam(search) : null
   return {
     virtual,
     mock: isDev && virtual === null && new URLSearchParams(search).has('scenario'),
@@ -150,6 +154,7 @@ const INITIAL_DATA: Omit<MeasurementData, 'now'> = {
 
 export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_CLOCK }) {
   const { clock } = deps
+  const allowVirtual = deps.allowVirtual ?? isDevBuild()
 
   // 직렬화할 필요도, 화면을 다시 그릴 필요도 없는 것들은 상태가 아니라 클로저에 둔다.
   let source: GpsSource | null = null
@@ -304,8 +309,9 @@ export function createMeasurementStore(deps: MeasurementDeps = { clock: SYSTEM_C
         stopTarget()
 
         const now = clock.now()
+        // 가상 GPS의 최종 관문: 허용되지 않은 환경(배포)에서는 가상을 요청해도 실제 GPS로 시작한다. (가상 공급원·타이머를 만들지 않는다.)
         const runSource: RunSource =
-          options.virtual === undefined
+          options.virtual === undefined || !allowVirtual
             ? { kind: 'real' }
             : { kind: 'virtual', scenarioId: options.virtual }
 

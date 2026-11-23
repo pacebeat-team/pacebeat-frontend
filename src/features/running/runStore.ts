@@ -3,6 +3,8 @@ import { createStore } from 'zustand/vanilla'
 import type { StoreApi } from 'zustand/vanilla'
 import { clampDurationSec, rescaleDurationSec } from './goal.ts'
 import { NO_GOAL } from './record.ts'
+import { normalizeRunGuidance } from './runGuidance.ts'
+import type { RunGuidance } from './runGuidance.ts'
 import { isRunActive, pauseRun, resumeRun, startRun, stopRun } from './runSession.ts'
 import type { RunEndReason } from './runSession.ts'
 import { appendDistanceSample } from './splits.ts'
@@ -31,8 +33,11 @@ interface RunStoreActions {
   // 음악을 고른다. 고르지 않으면 null
   setMusicTrack: (musicTrackId: string | null) => void
   // 활성 세션(진행 중·일시정지)이 있으면 아무것도 하지 않는다. TIME 모드는 목표가 없고, GPS 모드는 draft의 목표를 쓴다.
-  startRun: (mode: RunMode, now: number, createId?: () => string) => void
+  // guidance: 시작 시점의 안내 설정. 세션에 고정되며 이후 설정이 바뀌어도 이 세션은 바뀌지 않는다. 없으면 스냅샷 없이 시작한다(기본값으로 읽힌다).
+  startRun: (mode: RunMode, now: number, createId?: () => string, guidance?: RunGuidance) => void
   pauseRun: (now: number) => void
+  // 자동 일시정지: 진행 중일 때만 멈추고 autoPaused 표시를 남긴다. 재개는 resumeRun(사용자 버튼)뿐이다.
+  autoPauseRun: (now: number) => void
   resumeRun: (now: number) => void
   stopRun: (now: number, reason?: RunEndReason) => void
   // 누적 거리 샘플을 추가한다(구간 계산용). 거리가 줄었거나 시간이 거꾸로 간 샘플은 버린다.
@@ -48,6 +53,13 @@ interface RunStoreActions {
 export type RunStoreState = RunStoreData & RunStoreActions
 
 export type RunStoreApi = StoreApi<RunStoreState>
+
+// 자동 일시정지 표시를 지운다(재개·종료 때).
+function withoutAutoPaused(snapshot: RunSessionSnapshot): RunSessionSnapshot {
+  const copy: { -readonly [K in keyof RunSessionSnapshot]: RunSessionSnapshot[K] } = { ...snapshot }
+  delete copy.autoPaused
+  return copy
+}
 
 function pushRecentGoal(recent: readonly RecentGoal[], goal: RecentGoal): RecentGoal[] {
   const others = recent.filter(
@@ -74,7 +86,7 @@ export function createRunStore(storage: RunStorage = createRunStorage()): RunSto
       set(({ draft }) => ({ draft: { ...draft, targetDurationSec: clampDurationSec(draft.distanceKm, durationSec) } })),
     setMusicTrack: (musicTrackId) => set(({ draft }) => ({ draft: { ...draft, musicTrackId } })),
 
-    startRun: (mode, now, createId) => {
+    startRun: (mode, now, createId, guidance) => {
       const current = get().activeSession
       if (current !== null && isRunActive(current.session)) return
       if (!Number.isFinite(now)) return
@@ -89,6 +101,7 @@ export function createRunStore(storage: RunStorage = createRunStorage()): RunSto
           session,
           distanceSamples: [],
           gpsGaps: [],
+          ...(guidance === undefined ? {} : { guidance: normalizeRunGuidance(guidance) }),
         },
         draft: isGps
           ? {
@@ -102,23 +115,27 @@ export function createRunStore(storage: RunStorage = createRunStorage()): RunSto
       })
     },
     pauseRun: (now) =>
+      set(({ activeSession }) => {
+        if (activeSession === null) return {}
+        // 수동 일시정지. 이미 자동으로 멈춰 있으면 session은 그대로이고(중복 구간 없음) 자동 표시만 남는다.
+        return { activeSession: { ...activeSession, session: pauseRun(activeSession.session, now) } }
+      }),
+    autoPauseRun: (now) =>
       set(({ activeSession }) =>
-        activeSession === null
+        activeSession === null || activeSession.mode !== 'gps' || activeSession.session.status !== 'running'
           ? {}
-          : { activeSession: { ...activeSession, session: pauseRun(activeSession.session, now) } },
+          : { activeSession: { ...activeSession, session: pauseRun(activeSession.session, now), autoPaused: true } },
       ),
     resumeRun: (now) =>
-      set(({ activeSession }) =>
-        activeSession === null
-          ? {}
-          : { activeSession: { ...activeSession, session: resumeRun(activeSession.session, now) } },
-      ),
+      set(({ activeSession }) => {
+        if (activeSession === null) return {}
+        return { activeSession: withoutAutoPaused({ ...activeSession, session: resumeRun(activeSession.session, now) }) }
+      }),
     stopRun: (now, reason = 'user') =>
-      set(({ activeSession }) =>
-        activeSession === null
-          ? {}
-          : { activeSession: { ...activeSession, session: stopRun(activeSession.session, now, reason) } },
-      ),
+      set(({ activeSession }) => {
+        if (activeSession === null) return {}
+        return { activeSession: withoutAutoPaused({ ...activeSession, session: stopRun(activeSession.session, now, reason) }) }
+      }),
     recordDistanceSample: (elapsedMs, distanceM) =>
       set(({ activeSession }) =>
         activeSession === null || activeSession.mode === 'time'

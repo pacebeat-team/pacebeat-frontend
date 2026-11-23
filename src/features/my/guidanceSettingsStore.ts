@@ -48,3 +48,9 @@ export const guidanceSettingsStore = createGuidanceSettingsStore()
 export function useGuidanceSettings<T>(selector: (state: GuidanceState) => T): T {
   return useStore(guidanceSettingsStore, selector)
 }
+
+// 러닝을 시작하는 순간의 안내 설정(값만 복사한다). 러닝 세션이 이것을 고정해 쓴다.
+export function getGuidanceSnapshot(): GuidanceSettings {
+  const { beatGuide, voiceGuide, frequency, autoPause } = guidanceSettingsStore.getState()
+  return { beatGuide, voiceGuide, frequency, autoPause }
+}

@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+import { createDeleteAction } from '../../features/my/deleteAction'
 import { MY_ROUTES } from '../../features/my/routes'
 import { useMyBack } from '../../features/my/useMyBack'
 import { DeviceScreen } from './DeviceParts'
@@ -11,11 +13,18 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-// Figma `MY / Data deletion`. 삭제 대상을 안내하기만 한다. 확인해도 어떤 데이터도 지우지 않고 데이터 관리 화면으로 돌아간다.
+// Figma `MY / Data deletion`. 주요 버튼 "확인"만 저장된 러닝 기록을 실제로 지우고, 보조 버튼 "돌아가기"와 헤더 뒤로가기는 아무것도 지우지 않고 이전 화면으로 간다.
+// 삭제에 실패하면 이 화면에 머문다(안내 문구는 Figma에 없어 확정 전이다. docs/unconfirmed-copy.md).
 export function DataDeletePage() {
   const goBack = useMyBack(MY_ROUTES.data)
+  const action = useMemo(() => createDeleteAction({ leave: goBack }), [goBack])
   return (
-    <DeviceScreen title="데이터 삭제" onBack={goBack} onConfirm={goBack} confirmLabel="돌아가기">
+    <DeviceScreen
+      title="데이터 삭제"
+      onBack={action.cancel}
+      onConfirm={() => void action.confirm()}
+      secondary={{ label: '돌아가기', onClick: action.cancel }}
+    >
       <p className="mt-4 text-[16px] leading-6">러닝 기록과 인솔 측정 데이터를 삭제하면 복원할 수 없어요.</p>
       <h3 className="mt-6 text-[18px] font-medium leading-[25px]">삭제 대상</h3>
       <div className="mt-3 flex flex-col">

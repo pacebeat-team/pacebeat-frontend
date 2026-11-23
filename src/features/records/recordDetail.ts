@@ -51,7 +51,7 @@ export interface SplitRowView {
 function buildSplitRow(split: RunSplit): SplitRowView {
   return {
     key: split.index,
-    label: split.distanceM >= 1000 ? `${split.index} km` : `마지막 ${(split.distanceM / 1000).toFixed(2)} km`,
+    label: split.distanceM >= 1000 ? `${split.index} km` : `마지막 ${formatDistanceKm2(split.distanceM)} km`,
     timeText: formatDuration(split.durationMs / 1000),
     paceText: formatPaceOrDash(split.paceSecPerKm),
   }

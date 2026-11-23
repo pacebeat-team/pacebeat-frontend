@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { ScreenHeader } from '../../components/common/ScreenHeader'
+import { TextButton } from '../../components/common/TextButton'
 
 // Figma DEVICE 화면의 공통 틀: 뒤로 가기(마이) + 34px Light 제목 + 내용. footer가 있으면 하단 CTA(확인)를 둔다.
 export function DeviceScreen({
@@ -8,12 +9,15 @@ export function DeviceScreen({
   onBack,
   onConfirm,
   confirmLabel = '확인',
+  secondary,
   children,
 }: {
   title: string
   onBack: () => void
   onConfirm?: () => void
   confirmLabel?: string
+  // 주요 버튼 아래의 보조 버튼(예: 돌아가기)
+  secondary?: { label: string; onClick: () => void }
   children: ReactNode
 }) {
   return (
@@ -26,6 +30,7 @@ export function DeviceScreen({
       {onConfirm !== undefined && (
         <div className="shrink-0 px-3 pb-[9px] pt-2">
           <PrimaryButton label={confirmLabel} onClick={onConfirm} />
+          {secondary !== undefined && <TextButton label={secondary.label} onClick={secondary.onClick} />}
         </div>
       )}
     </div>
