@@ -12,6 +12,8 @@ import {
 } from '../consent.ts'
 import type { ConsentDraft } from '../consent.ts'
 import { ConsentRow } from '../components/ConsentRow.tsx'
+import { ProfileCta } from '../components/ProfileCta.tsx'
+import { ProfileHeader } from '../components/ProfileHeader.tsx'
 import { TermsSheet } from '../components/TermsSheet.tsx'
 import { profileStore } from '../profileStore.ts'
 import { PROFILE_ROUTES } from '../routes.ts'
@@ -20,59 +22,7 @@ import type { ConsentKey } from '../types.ts'
 // 가입 동의 화면 (Figma PROFILE / Consent).
 // 선택 상태는 이 화면의 draft로만 들고 있다가, CTA를 눌렀을 때만 submitConsent로 Store에 저장한다.
 
-// TODO(PR #30 병합 후): 아래 ConsentHeader를 공통 ScreenHeader로 교체한다.
-// 임시 구현이라 공통 컴포넌트가 생기면 이 컴포넌트는 삭제한다.
-function ConsentHeader({ title, onBack }: { title: string; onBack: () => void }) {
-  return (
-    <header className="flex h-[44px] items-center gap-[8px]">
-      <button
-        type="button"
-        onClick={onBack}
-        aria-label="뒤로 가기"
-        className="flex size-[44px] shrink-0 cursor-pointer items-center justify-center"
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M15 5L8 12L15 19" stroke="#111111" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      <h1 className="text-[16px] font-medium leading-[22px] text-[#111111]">{title}</h1>
-    </header>
-  )
-}
-
-// TODO(PR #30 병합 후): 아래 ConsentCta를 공통 PrimaryButton으로 교체한다.
-// 활성 모양은 공통 PrimaryButton(#111111, 글자 #fefefe, 오른쪽 44px 화살표 원)을 따르고,
-// 비활성 모양은 Figma `button / primary / disabled`(#f4f4f6, 글자 #626174, 화살표 원 없음)를 따른다.
-// 공통 PrimaryButton의 비활성 모양이 이와 다르면 이 화면의 비활성 처리는 그대로 두거나 디자인과 맞춘다.
-function ConsentCta({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
-  if (disabled) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="flex h-[64px] w-full cursor-not-allowed items-center rounded-full bg-[#f4f4f6] pl-[28px] pr-[12px] text-left text-[18px] font-medium leading-[26px] text-[#626174]"
-      >
-        {label}
-      </button>
-    )
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-[64px] w-full cursor-pointer items-center gap-[12px] rounded-full bg-[#111111] py-[10px] pl-[28px] pr-[12px] text-left text-[18px] font-medium leading-[26px] text-[#fefefe] transition-opacity active:opacity-[0.78]"
-    >
-      <span className="min-w-0 flex-1">{label}</span>
-      <span className="flex size-[44px] shrink-0 items-center justify-center rounded-full bg-[#fefefe]" aria-hidden="true">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <path d="M5 12H19M13 6L19 12L13 18" stroke="#111111" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-    </button>
-  )
-}
-
-// TODO(PR #30 병합 후): 온보딩 인트로 경로가 생기면 이 값을 라우트 상수로 바꾼다. 지금은 해당 경로가 없다.
+// 이전 화면이 없을 때 돌아갈 곳. 온보딩 경로(/onboarding/...)는 라우트 상수가 따로 없어 문자열로 둔다.
 const BACK_FALLBACK_PATH = '/onboarding/intro'
 
 export function ConsentScreen() {
@@ -108,8 +58,8 @@ export function ConsentScreen() {
   }
 
   return (
-    <div className="flex flex-col px-[24px] pb-[24px] pt-[12px]">
-      <ConsentHeader title="가입하기" onBack={handleBack} />
+    <div className="flex flex-col px-[24px] pt-[12px]">
+      <ProfileHeader title="가입하기" onBack={handleBack} />
 
       <h2 className="mt-[16px] text-[34px] font-light leading-[44px] tracking-[-1.02px] text-[#111111]">
         시작하기 전에
@@ -138,10 +88,11 @@ export function ConsentScreen() {
             />
           ))}
         </div>
+      </div>
 
-        <div className="mt-[20px]">
-          <ConsentCta label="동의하고 계속하기" disabled={!continuable} onClick={handleSubmit} />
-        </div>
+      {/* 화면이 낮아 내용이 넘치면 스크롤 영역 아래에 붙어 CTA가 항상 보인다. 내용이 들어가는 높이에서는 목록 바로 아래(Figma 위치)에 놓인다. */}
+      <div className="sticky bottom-0 -mx-[24px] bg-[#fefefe] px-[24px] pb-[24px] pt-[20px]">
+        <ProfileCta label="동의하고 계속하기" disabled={!continuable} onClick={handleSubmit} />
         <p className="mt-[12px] text-[13px] font-normal leading-[18px] text-[#626174]" aria-live="polite">
           {getRequirementMessage(draft)}
         </p>

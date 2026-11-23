@@ -1,57 +1,11 @@
 import type { ReactNode } from 'react'
 import { useKeyboardInset } from '../keyboardInset.ts'
+import { ProfileCta } from './ProfileCta.tsx'
+import { ProfileHeader } from './ProfileHeader.tsx'
 
 // 프로필 입력 3단계 화면의 공통 틀 (Figma PROFILE / Nickname · Demographics · Body).
 // 위쪽은 스크롤되는 콘텐츠(헤더, 진행 표시, 제목, 설명, 입력 영역)이고, 아래쪽 푸터(CTA, 건너뛰기)는 항상 보인다.
 // 부모(AppLayout의 main)가 높이를 정해 주므로, 이 컴포넌트는 그 높이를 채우고 안쪽만 스크롤한다.
-
-// TODO(PR #30 병합 후): 아래 ProfileHeader를 공통 ScreenHeader로, ProfileCta를 공통 PrimaryButton으로 교체한다.
-// 공통 컴포넌트가 이 브랜치에 없어서 임시로 둔 구현이며, 색은 Figma 값을 직접 쓴다.
-function ProfileHeader({ title, onBack }: { title: string; onBack: () => void }) {
-  return (
-    <header className="flex h-[44px] items-center gap-[8px]">
-      <button
-        type="button"
-        onClick={onBack}
-        aria-label="뒤로 가기"
-        className="flex size-[44px] shrink-0 cursor-pointer items-center justify-center"
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M15 5L8 12L15 19" stroke="#111111" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      <h1 className="text-[16px] font-medium leading-[22px] text-[#111111]">{title}</h1>
-    </header>
-  )
-}
-
-function ProfileCta({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
-  if (disabled) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="flex h-[64px] w-full cursor-not-allowed items-center rounded-full bg-[#f4f4f6] pl-[28px] pr-[12px] text-left text-[18px] font-medium leading-[26px] text-[#626174]"
-      >
-        {label}
-      </button>
-    )
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-[64px] w-full cursor-pointer items-center gap-[12px] rounded-full bg-[#111111] py-[10px] pl-[28px] pr-[12px] text-left text-[18px] font-medium leading-[26px] text-[#fefefe] transition-opacity active:opacity-[0.78]"
-    >
-      <span className="min-w-0 flex-1">{label}</span>
-      <span className="flex size-[44px] shrink-0 items-center justify-center rounded-full bg-[#fefefe]" aria-hidden="true">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <path d="M5 12H19M13 6L19 12L13 18" stroke="#111111" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-    </button>
-  )
-}
 
 export interface ProfileStepLayoutProps {
   // 3단계 중 몇 번째인가

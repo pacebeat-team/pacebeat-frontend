@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import splashVideo from '../assets/videos/splash-original.mp4'
 import splashPoster from '../assets/videos/splash-poster.png'
-import { getEntryPath } from '../lib/entryPath'
-import { useOnboardingStore } from '../stores/onboardingStore'
+import { resolveEntryPath } from '../app/entryFlow'
 
 export function SplashPage() {
   const navigate = useNavigate()
@@ -11,11 +10,11 @@ export function SplashPage() {
   const hasNavigatedRef = useRef(false)
   const [step, setStep] = useState<'video' | 'logo'>('video')
 
-  // Splash 02에서만 호출한다. 이동 시점의 온보딩 진행 상태로 첫 화면을 정한다.
+  // Splash 02에서만 호출한다. 이동 시점의 온보딩·프로필·기초 측정 상태로 첫 화면을 정한다.
   const handleNavigateToEntry = useCallback(() => {
     if (hasNavigatedRef.current) return
     hasNavigatedRef.current = true
-    navigate(getEntryPath(useOnboardingStore.getState()), { replace: true })
+    navigate(resolveEntryPath(), { replace: true })
   }, [navigate])
 
   const handleVideoEnded = useCallback(() => {

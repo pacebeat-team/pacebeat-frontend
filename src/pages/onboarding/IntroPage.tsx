@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import mascot from '../../assets/images/mascot-p.png'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { TextButton } from '../../components/common/TextButton'
+import { PROFILE_ROUTES } from '../../features/profile/routes'
 
 interface Instruction {
   title: string
@@ -22,9 +23,11 @@ export function IntroPage() {
     navigate('/onboarding/experience')
   }, [navigate])
 
+  // Figma: "계정 만들기"는 프로필 가입 동의 화면으로 이어진다. 인증은 아직 없어서 프로필 가입 흐름으로 들어가는 버튼으로 쓴다.
+  // 동의 화면은 가입 전이면 항상 열 수 있어 온보딩을 마치기 전에도 막히지 않는다. 뒤로 가면 Intro로 돌아온다.
   const handleCreateAccount = useCallback(() => {
-    // TODO: 인증 구조가 없어 "계정 만들기" 목적지가 미확정이다. 확정 전까지 동작하지 않는다.
-  }, [])
+    navigate(PROFILE_ROUTES.consent)
+  }, [navigate])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace">

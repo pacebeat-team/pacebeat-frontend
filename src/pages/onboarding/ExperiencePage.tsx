@@ -5,6 +5,7 @@ import { ScreenHeader } from '../../components/common/ScreenHeader'
 import { ChoiceChip } from '../../components/onboarding/ChoiceChip'
 import { ExperienceOption } from '../../components/onboarding/ExperienceOption'
 import { StepIndicator } from '../../components/onboarding/StepIndicator'
+import { canContinueFromExperience } from '../../lib/onboardingFlow'
 import { useOnboardingStore } from '../../stores/onboardingStore'
 import type { ExperienceLevel, WeeklyRuns } from '../../types/onboarding'
 
@@ -103,7 +104,7 @@ export function ExperiencePage() {
       </div>
 
       <footer className="px-3 pb-[9px] pt-2">
-        <PrimaryButton label="다음" disabled={experienceLevel === null} onClick={handleNext} />
+        <PrimaryButton label="다음" disabled={!canContinueFromExperience(experienceLevel)} onClick={handleNext} />
       </footer>
     </div>
   )
