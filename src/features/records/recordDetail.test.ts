@@ -145,3 +145,18 @@ test('withReflection: 다른 값은 그대로 두고 리포트만 바꾼다, 빈
   assert.deepEqual({ ...next, reflection: null }, base)
   assert.equal(withReflection(next, EMPTY_DRAFT).reflection, null)
 })
+
+test('마지막 구간 라벨은 총 거리와 같은 규칙(소수 둘째 자리 버림)이다', () => {
+  const view = buildRecordDetail(
+    rec({
+      result: {
+        elapsedMs: 36_000,
+        distanceM: 105.6,
+        avgPaceSecPerKm: 344,
+        completion: 'partial',
+        splits: [{ index: 1, distanceM: 105.6, durationMs: 36_000, paceSecPerKm: 341 }],
+      },
+    }),
+  )
+  assert.equal(view.splitRows[0].label, '마지막 0.10 km')
+})

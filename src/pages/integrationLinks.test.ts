@@ -58,4 +58,19 @@ describe('통합 연결 정리', () => {
     assert.ok(read('./GrowthPage.tsx').includes('to="/records"'))
     assert.ok(read('./my/DataPage.tsx').includes('to="/records"'))
   })
+  test('자세 리포트: One side 경로가 선언되어 있고 Report가 가리키는 경로와 같다', () => {
+    const router = read('../app/router.tsx')
+    assert.ok(/path: 'posture\/:recordId'/.test(router))
+    assert.ok(read('../features/posture/postureReport.ts').includes("`${POSTURE_PATH}/${encodeURIComponent(recordId)}`"))
+  })
+  test('자세 리포트 화면에는 Figma의 예시 수치가 들어 있지 않다(실제 데이터만 표시)', () => {
+    for (const file of ['./growth/PosturePage.tsx', './growth/PostureOneSidePage.tsx', '../features/posture/postureReport.ts', '../features/posture/fromRecords.ts']) {
+      assert.doesNotMatch(read(file), /47 : 53|55%|62%|측정 예시|측정 품질 보통/, file)
+    }
+  })
+  test('No data의 인솔 연결 확인 버튼은 본문 안에 있고 고정 푸터에 두지 않는다', () => {
+    const source = read('./growth/PosturePage.tsx')
+    assert.ok(source.includes('navigate(MY_ROUTES.device)'))
+    assert.doesNotMatch(source, /shrink-0 px-3 pb-\[9px\]/)
+  })
 })

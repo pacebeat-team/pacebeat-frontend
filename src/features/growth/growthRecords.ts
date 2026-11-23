@@ -1,4 +1,4 @@
-import { isRunRecord, RUN_STORAGE_KEYS } from '../running/runStorage.ts'
+import { parseRunRecord, RUN_STORAGE_KEYS } from '../running/runStorage.ts'
 import type { RunRecord } from '../running/types.ts'
 
 // 성장 화면이 저장된 러닝 기록을 읽는 방법 (순수 함수 + 얇은 저장소 읽기).
@@ -32,7 +32,10 @@ export function parseGrowthRecords(raw: string | null): GrowthRecordsResult {
   if (!isObject(parsed) || parsed.version !== STORAGE_VERSION || !Array.isArray(parsed.data)) {
     return { ok: false, reason: 'unreadable' }
   }
-  const records = parsed.data.filter(isRunRecord)
+  const records = parsed.data.flatMap((item) => {
+    const record = parseRunRecord(item)
+    return record === null ? [] : [record]
+  })
   const skipped = parsed.data.length - records.length
   if (records.length === 0 && skipped > 0) return { ok: false, reason: 'unreadable' }
   return { ok: true, records, skipped }

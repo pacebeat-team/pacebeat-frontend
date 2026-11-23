@@ -4,6 +4,7 @@ import { profileStore } from '../features/profile/profileStore.ts'
 import { getEntryPath } from '../lib/entryPath.ts'
 import { getRouteRedirect } from '../lib/routeAccess.ts'
 import type { EntryOnboardingState } from '../lib/entryPath.ts'
+import { isDevBuild } from '../lib/devEnv.ts'
 import { measurementStore, parseUrlMode } from '../stores/measurementStore.ts'
 import type { MeasurementData } from '../stores/measurementStore.ts'
 import { useOnboardingStore } from '../stores/onboardingStore.ts'
@@ -84,11 +85,8 @@ export function createMockAwareMeasurementReader(isMockMode: boolean, read: Meas
   return () => (isMockMode ? { session: { status: 'finished' } } : read())
 }
 
-// 이 파일은 vite 타입이 없는 테스트 프로젝트(tsconfig.test.json)에서도 컴파일되므로 import.meta.env는 필요한 모양으로만 좁혀 읽는다.
 // (window가 없는 테스트 환경에서는 아래에서 평가되지 않는다.)
-const isMockModeAtLoad: boolean =
-  typeof window !== 'undefined' &&
-  parseUrlMode(window.location.search, (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true).mock
+const isMockModeAtLoad: boolean = typeof window !== 'undefined' && parseUrlMode(window.location.search, isDevBuild()).mock
 
 // 지금 시점의 실제 Store와 이번 실행 기록으로 계산한다. 호출할 때마다 그 시점의 상태를 읽는다.
 export const resolveRouteRedirect = createRouteRedirectResolver(
