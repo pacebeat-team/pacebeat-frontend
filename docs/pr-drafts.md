@@ -35,7 +35,7 @@ develop (fc3d829)
 
 **테스트** (통합 브랜치 `integration/screens-api`, 로컬)
 - tsc 통과, ESLint 통과, vite build 통과
-- Node 테스트 1396건 통과, Vitest 4파일 16건 통과(forks·threads 풀 모두)
+- Node 테스트 1426건 통과(이전 기록 1396/1403은 오래된 수치), Vitest 4파일 16건 통과(forks·threads 풀 모두)
 - 브라우저(localhost, env 없음): 앱 부팅·온보딩 진입, 콘솔 오류 없음, 서버 호출 없음
 - **미검증**: 실제 Supabase 로그인/JWT, 실서버 쓰기, 실기기 iPhone 19개 항목(`docs/run-real-device-checklist.md`, 전부 미수행)
 
@@ -43,6 +43,14 @@ develop (fc3d829)
 - `main.tsx` 병합 충돌은 양쪽 유지로 해결(`runSessionSync` 임포트 + `QueryClientProvider`/`startAuth`/`syncWiring`).
 - 로컬 우선: 서버 응답으로 로컬 데이터를 덮어쓰지 않는다. 서버→로컬 반영은 하지 않았다(아래 미완료).
 - `client_session_id = 로컬 sessionId`: 백엔드는 `(user_id, client_session_id)` upsert이고 재전송 시 덮어쓴다(소스 확인, 실서버 미검증).
+
+**동기화 안정성 점검(#70)**: 실제 결함 7건 수정(직렬화·대기 표시 유실·로그아웃/계정 변경 중 늦은 응답·중복 실행 등, `docs/api-integration.md` 8장). 가짜 환경 회귀 테스트 37건. 알려진 한계: 장부가 비면 과거 삭제 기록 복원 가능, 대기 작업·대기열이 계정별로 분리되지 않음, 프로필 null 전송의 서버 의미 미확인.
+
+**계정별 격리(#70)**: 대기열·대기 작업을 소유자별 버킷으로 분리(`docs/api-integration.md` 9장). 게스트·소유자 불명(v1) 작업은 어떤 계정으로도 자동 전송하지 않고 보존. 가짜 환경 격리 테스트 14건. 정책 충돌로 기존 테스트 2건의 기대값을 바꿨다(9-4). 미해결: 게스트·legacy 작업의 계정 귀속 정책, 만료 중 작업의 소유자.
+
+**계정 경계 보안 점검(#69·#70)**: 갱신 응답이 다른 계정 세션을 덮어쓰는 문제, 이전 계정 요청에 현재 계정 토큰이 붙는 문제, 늦은 401이 현재 계정을 만료시키는 문제 등 7건 수정(`docs/api-integration.md` 10장). 회귀 테스트 16건. 미해결: 이미 나간 요청의 서버 반영은 취소 불가, 실서버·다중 탭 미검증.
+
+**#72 상태**: 로컬 자동화 테스트(Node 1426 + Vitest 16)는 통과. **실제 API 통합 검증(Supabase 로그인·서버 쓰기)과 실기기 iPhone 검증은 수행하지 않았으므로 미완료**다.
 
 **미완료 / 외부 의존성** (상세: `docs/api-integration.md` 7장)
 | 항목 | 상태 | 이유 |
