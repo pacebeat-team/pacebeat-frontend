@@ -14,14 +14,14 @@ export function Metric({
   label: string;
 }) {
   return (
-    <div className="flex flex-1 flex-col gap-1">
-      <p className="flex items-baseline gap-[6px] whitespace-nowrap">
-        <span className="text-[28px] font-light leading-8">{value}</span>
-        {unit !== undefined && (
-          <span className="text-[13px] leading-[18px]">{unit}</span>
-        )}
+    // Figma `metric / …`: 위에 라벨(14/20, muted), 아래에 값(26/31)이며 단위는 값과 같은 크기의 한 줄이다. 간격 7px.
+    <div className="flex flex-1 flex-col gap-[7px]">
+      <p className="text-[14px] leading-5 text-muted">{label}</p>
+      <p className="whitespace-nowrap text-[26px] font-light leading-[31px]">
+        {value}
+        {unit === "km" ? " " : ""}
+        {unit}
       </p>
-      <p className="text-[13px] leading-[18px] text-muted">{label}</p>
     </div>
   );
 }
@@ -39,9 +39,12 @@ export function LinkRow({ to, label }: { to: string; label: string }) {
 export function BarChart({
   chart,
   label,
+  large = false,
 }: {
   chart: ChartView;
   label: string;
+  // 주간 카드는 값이 더 커서(78px) 차트가 30px 아래에서 시작한다. 월간은 26px.
+  large?: boolean;
 }) {
   const top = chart.guides.length - 1;
   return (
@@ -54,7 +57,7 @@ export function BarChart({
           </li>
         ))}
       </ul>
-      <div aria-hidden="true" className="relative mt-4 h-[154px] w-full">
+      <div aria-hidden="true" className={`relative h-[154px] w-full ${large ? "mt-[30px]" : "mt-[26px]"}`}>
         {chart.guides.map((km, index) => (
           <div
             key={km}
@@ -62,7 +65,7 @@ export function BarChart({
             className="absolute inset-x-0 flex h-4 items-center gap-2"
             style={{ top: 8 + ((top - index) * CHART_HEIGHT) / top }}
           >
-            <span className="w-6 text-right text-[11px] leading-4 text-[#c4c5bf]">
+            <span className="w-6 text-right text-[10px] leading-[14px] text-[#c4c5bf]">
               {km}
             </span>
             <span className="h-px flex-1 bg-[rgba(219,224,209,0.2)]" />

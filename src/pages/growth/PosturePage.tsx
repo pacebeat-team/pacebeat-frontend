@@ -16,12 +16,13 @@ function PostureNoData({ onBack }: { onBack: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
         <ScreenHeader title="성장" onBack={onBack} />
         <h2 className="mt-4 w-full text-[34px] font-light leading-[44px] tracking-[-1.02px]">자세 리포트</h2>
-        <p className="mt-4 text-[30px] font-light leading-[36px] tracking-[-0.9px]">
+        {/* Figma `POSTURE / No data`: 제목 두 줄이 73px(줄 높이 36.5), 설명 두 줄이 45px(22.4)라 아래 버튼이 y 338에 놓인다. */}
+        <p className="mt-4 text-[30px] font-light leading-[36.5px] tracking-[-0.9px]">
           측정 기록이
           <br />
           아직 없어요.
         </p>
-        <p className="mt-4 text-[16px] leading-[22px]">스마트 인솔을 연결한 뒤 달리면 지원되는 자세 데이터를 확인할 수 있어요.</p>
+        <p className="mt-4 text-[16px] leading-[22.4px]">스마트 인솔을 연결한 뒤 달리면 지원되는 자세 데이터를 확인할 수 있어요.</p>
         <div className="mt-7">
           <PrimaryButton label="인솔 연결 확인" onClick={() => navigate(MY_ROUTES.device)} />
         </div>
@@ -51,7 +52,8 @@ function PostureReport({ model, onBack }: { model: PostureReportModel; onBack: (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace text-ink">
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
         <ScreenHeader title="자세 리포트" onBack={onBack} />
-        <h2 className="mt-4 w-full text-[34px] font-light leading-[44px] tracking-[-1.02px]">
+        {/* Figma `POSTURE / Report`: 두 줄 제목이 89px(줄 높이 44.5)라 아래 요소가 1px씩 내려온다. */}
+        <h2 className="mt-4 w-full text-[34px] font-light leading-[44.5px] tracking-[-1.02px]">
           좌우 밸런스를
           <br />
           살펴볼까요.

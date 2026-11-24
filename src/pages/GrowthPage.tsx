@@ -21,30 +21,45 @@ function PaceBlock({ records, now }: { records: readonly RunRecord[]; now: Date 
   if (pace === null) return null
   return (
     <>
-      <div className="mt-5 h-px w-full bg-line" />
-      <section aria-label="최근 3 km 완주 페이스" className="mt-5 flex flex-col gap-1">
-        <h2 className="text-[13px] leading-[18px] text-muted">최근 3 km 완주 페이스</h2>
-        <p className="flex items-baseline gap-2 whitespace-nowrap text-[28px] font-light leading-8">
+      <div className="mt-[18px] h-px w-full bg-line" />
+      {/* Figma: 라벨 16/22, 값 28/34(라벨과 12px), 설명 14/20(값과 4px). 구분선 아래 22px. */}
+      <section aria-label="최근 3 km 완주 페이스" className="mt-[22px] flex flex-col gap-1">
+        <h2 className="mb-2 text-[16px] leading-[22px]">최근 3 km 완주 페이스</h2>
+        <p className="flex items-baseline gap-2 whitespace-nowrap text-[28px] font-light leading-[34px]">
           {pace.previousText !== null && !isPaceUnchanged(pace) && <span>{pace.previousText} →</span>}
           <span>{pace.latestText}</span>
           <span className="text-[13px] leading-[18px]">/km</span>
         </p>
         {pace.previousText !== null && pace.savedText !== null && (
-          <p className="text-[13px] leading-[18px] text-muted">이전 → 최근 3 km 완주 · {pace.savedText}</p>
+          <p className="text-[14px] leading-5 text-muted">이전 → 최근 3 km 완주 · {pace.savedText}</p>
         )}
-        {isPaceUnchanged(pace) && <p className="text-[13px] leading-[18px] text-muted">이전 3 km 완주와 같은 페이스예요</p>}
+        {isPaceUnchanged(pace) && <p className="text-[14px] leading-5 text-muted">이전 3 km 완주와 같은 페이스예요</p>}
       </section>
     </>
   )
 }
 
-function DarkCard({ title, distanceText, children }: { title: string; distanceText: string | null; children: React.ReactNode }) {
+// Figma `growth / monthly distance`(343px)와 `growth / weekly distance`(388px). 제목 16/22, 값과 8px 간격.
+// 월간 값은 72/83·단위 24/29, 주간은 78/90·27/32이며 주간 차트는 값 아래 30px에서 시작한다.
+function DarkCard({
+  title,
+  distanceText,
+  large = false,
+  children,
+}: {
+  title: string
+  distanceText: string | null
+  large?: boolean
+  children: React.ReactNode
+}) {
   return (
     <section className="flex flex-col rounded-[32px] border border-solid border-[rgba(219,224,209,0.32)] bg-[linear-gradient(147deg,#000_22%,#1a1a1a_103%)] p-6 text-app-bg shadow-[inset_0_-5px_8px_rgba(0,0,0,0.65),inset_0_2px_3px_rgba(255,255,242,0.22)]">
-      <h2 className="text-[18px] font-medium leading-[25px]">{title}</h2>
-      <p className="flex h-[83px] items-baseline gap-[6px] whitespace-nowrap">
-        <span className="text-[72px] font-light leading-[83px] tracking-[-2.16px]">{distanceText ?? '–'}</span>
-        {distanceText !== null && <span className="text-[24px] leading-[29px]">km</span>}
+      <h2 className="text-[16px] font-medium leading-[22px]">{title}</h2>
+      <p className={`mt-2 flex items-baseline gap-[6px] whitespace-nowrap ${large ? 'h-[90px]' : 'h-[83px]'}`}>
+        <span className={`font-light ${large ? 'text-[78px] leading-[90px] tracking-[-2.34px]' : 'text-[72px] leading-[83px] tracking-[-2.16px]'}`}>
+          {distanceText ?? '–'}
+        </span>
+        {distanceText !== null && <span className={large ? 'text-[27px] leading-8' : 'text-[24px] leading-[29px]'}>km</span>}
       </p>
       {children}
     </section>
@@ -148,13 +163,13 @@ export function GrowthPage() {
               </div>
             ) : (
               <>
-                <p className="mt-4 text-[14px] leading-5 text-muted">{monthly.titleText}</p>
-                <div className="mt-2">
+                <p className="mt-[18px] text-[14px] leading-5 text-muted">{monthly.titleText}</p>
+                <div className="mt-[14px]">
                   <DarkCard title="누적 러닝 거리" distanceText={monthly.distanceText}>
                     <BarChart chart={monthly.chart} label="주별 러닝 거리(km)" />
                   </DarkCard>
                 </div>
-                <div className="mt-5 flex gap-4">
+                <div className="mt-[22px] flex gap-6">
                   <Metric value={String(monthly.runCount)} unit="회" label="러닝" />
                   <Metric value={String(monthly.achievementPercent)} unit="%" label="목표 달성률" />
                 </div>
@@ -166,10 +181,10 @@ export function GrowthPage() {
             </div>
           ) : (
             <div className="mt-4">
-              <DarkCard title="이번 주 러닝 거리" distanceText={weekly.distanceText}>
-                <BarChart chart={weekly.chart} label="러닝별 거리(km)" />
+              <DarkCard title="이번 주 러닝 거리" distanceText={weekly.distanceText} large>
+                <BarChart chart={weekly.chart} label="러닝별 거리(km)" large />
               </DarkCard>
-              <div className="mt-5 flex gap-4">
+              <div className="mt-6 flex gap-6">
                 <Metric value={String(weekly.runCount)} unit="회" label="이번 주 러닝" />
               </div>
             </div>
