@@ -12,18 +12,19 @@ import { profileStore } from '../features/profile/profileStore'
 import { useMeasurementStore } from '../stores/measurementStore'
 import { useOnboardingStore } from '../stores/onboardingStore'
 
-function MenuRow({ to, label, value }: { to: string; label: string; value?: string }) {
+// Figma `row / …`: 행 간격 63px(행 y 458·521·584·647·710). 구분선 1px은 다음 행의 맨 윗줄에 겹쳐 있으므로
+// 첫 행을 뺀 행마다 위 테두리(border-t)로 그려 63px 안에 포함시키고, 글자는 같은 중심(행 위에서 32px)에 둔다.
+function MenuRow({ to, label, value, divided = true }: { to: string; label: string; value?: string; divided?: boolean }) {
   return (
-    <Link to={to} className="flex h-[64px] w-full items-center gap-3 text-left">
+    <Link
+      to={to}
+      className={`flex h-[63px] w-full items-center gap-3 text-left ${divided ? 'border-t border-line' : ''}`}
+    >
       <span className="min-w-0 flex-1 text-[16px] leading-[24px] text-ink">{label}</span>
       {value !== undefined && <span className="shrink-0 text-right text-[14px] leading-[22px] text-muted">{value}</span>}
       <img src={chevronRight} alt="" aria-hidden="true" className="size-[20px] shrink-0" />
     </Link>
   )
-}
-
-function Divider() {
-  return <div className="h-px w-full bg-line" aria-hidden="true" />
 }
 
 // Figma `MY`(08). 저장된 프로필·온보딩·기초 측정 값으로 채운다. 저장하지 않는 값(케이던스·품질)은 보여 주지 않는다.
@@ -86,14 +87,15 @@ export function MyPage() {
             <p className="mt-[10px] text-[14px] leading-[20px] text-muted">{baseline.measuredText}</p>
           </>
         )}
-        <MenuRow to={MEASUREMENT_GUIDE_PATH} label="기초 측정" value={baseline === null ? undefined : '다시 측정'} />
-        <Divider />
+        <MenuRow
+          to={MEASUREMENT_GUIDE_PATH}
+          label="기초 측정"
+          value={baseline === null ? undefined : '다시 측정'}
+          divided={false}
+        />
         <MenuRow to={MY_ROUTES.guidance} label="안내 설정" value={summarizeGuidance({ beatGuide, voiceGuide })} />
-        <Divider />
         <MenuRow to={MY_ROUTES.device} label="스마트 인솔" />
-        <Divider />
         <MenuRow to={MY_ROUTES.account} label="계정 · 권한" />
-        <Divider />
         <MenuRow to={MY_ROUTES.data} label="데이터 내보내기 · 삭제" />
       </div>
     </div>
