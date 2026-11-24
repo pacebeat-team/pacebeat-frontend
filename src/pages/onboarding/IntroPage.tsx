@@ -84,7 +84,7 @@ export function IntroPage() {
         </p>
       </div>
 
-      <footer className="px-3 pb-[9px] pt-2">
+      <footer className="px-3 pb-[var(--footer-pb-text)] pt-2">
         <TextButton label="계정 만들기" onClick={handleCreateAccount} />
       </footer>
     </div>

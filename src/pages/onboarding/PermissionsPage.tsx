@@ -125,7 +125,7 @@ export function PermissionsPage({ resolveNextPath }: PermissionsPageProps) {
         </div>
       </div>
 
-      <footer className="flex flex-col px-3 pb-[9px] pt-2">
+      <footer className="flex flex-col px-3 pb-[var(--footer-pb-secondary)] pt-2">
         <PrimaryButton
           label="권한 확인하고 계속"
           disabled={isRequesting}

@@ -63,7 +63,9 @@ export function ProfileStepLayout({
         <div className={first ? 'mt-[26px]' : 'mt-[28px]'}>{children}</div>
       </div>
 
-      <footer className="flex shrink-0 flex-col items-stretch px-[12px] pb-[9px] pt-[8px]">
+      <footer
+        className={`flex shrink-0 flex-col items-stretch px-[12px] pt-[8px] ${onSkip ? 'pb-[var(--footer-pb-secondary)]' : 'pb-[var(--footer-pb)]'}`}
+      >
         <ProfileCta label={ctaLabel} disabled={ctaDisabled} onClick={onCta} />
         {onSkip && (
           <button

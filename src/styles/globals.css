@@ -55,6 +55,12 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
+  /* Figma `layout / fixed footer`: 버튼 아래 여백. 버튼 하나(높이 108)는 36px, 보조 버튼이 붙으면(높이 136) 20px이며
+     홈 인디케이터 영역을 포함한다. 셸이 이미 더하는 safe-area-inset-bottom만큼은 빼서 기기에서도 같은 위치에 둔다. */
+  --footer-pb: max(0px, calc(36px - var(--safe-bottom)));
+  --footer-pb-secondary: max(0px, calc(20px - var(--safe-bottom)));
+  /* 텍스트 버튼만 있는 하단 영역(ONBOARDING / Intro, 높이 78): 버튼 y 774~818, 아래 26px. */
+  --footer-pb-text: max(0px, calc(26px - var(--safe-bottom)));
 }
 
 * {

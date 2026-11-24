@@ -35,7 +35,7 @@ export function ProfileEditPage() {
           <NicknameField value={value} onChange={setValue} feedback={feedback} onEnter={() => feedback.canSubmit && value.trim() !== saved && save()} />
         </div>
       </div>
-      <div className="shrink-0 px-3 pb-[9px] pt-2">
+      <div className="shrink-0 px-3 pb-[var(--footer-pb)] pt-2">
         <PrimaryButton label="저장" disabled={!feedback.canSubmit || value.trim() === saved} onClick={save} />
       </div>
     </div>

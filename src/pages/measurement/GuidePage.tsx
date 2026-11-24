@@ -139,7 +139,7 @@ export function GuidePage({ onSkip, onBack }: GuidePageProps) {
         )}
       </div>
 
-      <footer className="flex flex-col px-3 pb-[9px] pt-2">
+      <footer className="flex flex-col px-3 pb-[var(--footer-pb-secondary)] pt-2">
         <PrimaryButton label="측정 러닝 시작" onClick={handleStart} />
         <TextButton label="건너뛰고 둘러보기" onClick={handleSkip} />
       </footer>

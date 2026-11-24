@@ -103,7 +103,7 @@ export function ExperiencePage() {
         </div>
       </div>
 
-      <footer className="px-3 pb-[9px] pt-2">
+      <footer className="px-3 pb-[var(--footer-pb)] pt-2">
         <PrimaryButton label="다음" disabled={!canContinueFromExperience(experienceLevel)} onClick={handleNext} />
       </footer>
     </div>

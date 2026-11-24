@@ -137,7 +137,7 @@ export function ResultPage() {
         </div>
       </div>
 
-      <footer className="px-3 pb-[9px] pt-2">
+      <footer className="px-3 pb-[var(--footer-pb)] pt-2">
         {/* 첫 목표가 없으면 시작할 목표가 없으므로 비활성화한다. */}
         <PrimaryButton label="이 목표로 시작" disabled={firstGoal === null} onClick={handleStartGoal} />
       </footer>

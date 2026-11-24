@@ -36,7 +36,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isProfile = location.pathname === '/profile' || location.pathname.startsWith('/profile/')
   // 마이(08)는 Home처럼 390x844 프레임이다. 가입을 마친 사용자의 프로필 수정(/my/profile)은 입력 화면이라 하단 네비를 숨긴다.
   const myPath = location.pathname.replace(/\/+$/, '')
-  const isMy = myPath === '/my' || myPath.startsWith('/my/')
   const isMyHome = myPath === '/my'
   const hideNavigation = isSplash || isOnboarding || isMeasurement || isProfile || isRunHidden || isMyNavHidden(myPath)
 
@@ -45,27 +44,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   // - 위쪽은 상태바 영역 44px(기기 Safe Area가 더 크면 그 값)을 비운다.
   // Home(03)도 같은 390x844 프레임(상태바 44px 포함, 하단 내비 108px)이므로 같은 기하를 쓴다.
   // 기록(06)·성장(07)도 같은 프레임이다. '/records', '/growth'와 그 하위 경로만 해당한다.
-  const normalizedPath = normalizeRunPath(location.pathname)
-  const isFramed =
-    isRun ||
-    normalizedPath === '/home' ||
-    normalizedPath === '/records' ||
-    normalizedPath.startsWith('/records/') ||
-    normalizedPath === '/growth' ||
-    normalizedPath.startsWith('/growth/') ||
-    isMy
-  const shell = isFramed
-    ? 'max-[431px]:fixed max-[431px]:inset-0 max-[431px]:h-auto max-[431px]:max-h-none max-[431px]:max-w-none max-[431px]:rounded-none max-[431px]:shadow-none'
-    : 'border border-neutral-200/70'
-  const padding = isFramed
-    ? hideNavigation
+  // 온보딩·측정·프로필·스플래시도 Figma에서 같은 390x844 프레임(상태바 44px, 하단 고정 영역)이므로 모든 화면이 같은 기하를 쓴다.
+  // 예전에는 이 화면들만 테두리·둥근 모서리가 있는 카드(좁은 화면에서 374x820)로 그려져 Figma보다 작고 위·아래로 어긋났다.
+  const shell =
+    'max-[431px]:fixed max-[431px]:inset-0 max-[431px]:h-auto max-[431px]:max-h-none max-[431px]:max-w-none max-[431px]:rounded-none max-[431px]:shadow-none'
+  const padding = isSplash
+    ? 'pt-0 pb-0'
+    : hideNavigation
       ? 'pt-[max(44px,env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)]'
       : 'pt-[max(44px,env(safe-area-inset-top,0px))] pb-[108px]'
-    : hideNavigation
-      ? isSplash
-        ? 'pt-0 pb-0'
-        : 'pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]'
-      : 'pt-[env(safe-area-inset-top,0px)] pb-[calc(108px+env(safe-area-inset-bottom,0px))]'
 
   return (
     <div

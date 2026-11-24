@@ -30,8 +30,11 @@ export function DeviceScreen({
         <h2 className="mt-4 w-full text-[34px] font-light leading-[44px] tracking-[-1.02px]">{title}</h2>
         {children}
       </div>
+      {/* Figma layout / fixed footer: 버튼 하나는 아래 36px, 보조 버튼이 붙으면 20px(globals.css의 --footer-pb 계열). */}
       {onConfirm !== undefined && (
-        <div className="shrink-0 px-3 pb-[9px] pt-2">
+        <div
+          className={`shrink-0 px-3 pt-2 ${secondary !== undefined ? 'pb-[var(--footer-pb-secondary)]' : 'pb-[var(--footer-pb)]'}`}
+        >
           <PrimaryButton label={confirmLabel} onClick={onConfirm} disabled={confirmDisabled} />
           {secondary !== undefined && <TextButton label={secondary.label} onClick={secondary.onClick} />}
         </div>
