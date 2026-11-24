@@ -10,7 +10,7 @@ import trackLane2 from '../assets/home/track-lane-2.svg'
 import trackLane3 from '../assets/home/track-lane-3.svg'
 import dividerIcon from '../assets/home/divider.svg'
 import chevronRight from '../assets/icons/chevron-right.svg'
-import mascot from '../assets/images/mascot-p.png'
+import mascot from '../assets/images/mascot-p-home.png'
 import { confirmGoalForHomeStart } from '../features/home/homeEntry'
 import { buildHomeRecordsView, EMPTY_HOME_RECORDS } from '../features/home/homeRecords'
 import { buildGoalRowValue, buildHeroView, buildWeekRow } from '../features/home/homeView'
@@ -135,7 +135,7 @@ export function HomePage() {
         </p>
 
         <div className="home-mascot pointer-events-none absolute right-0 top-[67px] aspect-[173/220] w-[clamp(140px,calc(100cqw-189px),173px)]" aria-hidden="true">
-          <img src={mascot} alt="" className="size-full object-contain" />
+          <img src={mascot} alt="" decoding="async" className="size-full object-contain" />
         </div>
 
         <button
@@ -150,7 +150,8 @@ export function HomePage() {
         </button>
       </section>
 
-      <div className="flex w-full flex-col px-[10px]">
+      {/* Figma `layout / content`의 항목 간격 4px: hero(y 298~676) 다음 `details / activity`는 y 680에서 시작한다. */}
+      <div className="mt-1 flex w-full flex-col px-[10px]">
         {records.lastRunText !== null && (
           // Figma `row / 지난 러닝`처럼 chevron을 보이고, 가장 최근 기록의 상세(06)로 연결한다.
           <>

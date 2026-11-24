@@ -114,7 +114,11 @@ body {
 }
 
 /* HOME / HOME Arrival: Pose=Low → (0.8초 뒤) High(0.3초 이동) → (0.8초 뒤) Low(0.4초 복귀) 반복, 전체 2.3초.
-   High는 Low보다 (+6.8, -24)px 이동하고 약 -3.1° 회전. 기준값은 개발 전달 패키지 motion.json. */
+   Figma `motion / home mascot`(12991:4775)의 마스코트 이미지(173×220) 기준:
+   Low는 (0, 24), High는 (6.7776, 0)에 왼쪽 위 꼭짓점이 있고 그 꼭짓점을 기준으로 시계 방향 3.0688° 회전한다
+   (Figma rotation -3.0688°, 반시계가 양수). 그래서 회전 기준점은 왼쪽 위(0 0)이다.
+   이동은 이미지 크기에 대한 비율(6.7776/173, -24/220)로 두어 마스코트 폭이 줄어도 같은 비율로 움직인다.
+   전환은 SMART_ANIMATE ease-in-out(CSS ease-in-out과 같은 곡선). */
 @keyframes home-mascot-loop {
   0%,
   34.78% {
@@ -123,7 +127,7 @@ body {
   }
   47.83%,
   82.61% {
-    transform: translate(6.8px, -24px) rotate(-3.1deg);
+    transform: translate(3.9176%, -10.9091%) rotate(3.0688deg);
     animation-timing-function: ease-in-out;
   }
   100% {
@@ -132,8 +136,10 @@ body {
 }
 
 .home-mascot {
-  transform-origin: 50% 50%;
+  transform-origin: 0 0;
   animation: home-mascot-loop 2.3s infinite;
+  /* transform만 움직이므로 별도 합성 레이어로 올려 매 프레임 다시 그리지 않고 GPU가 이동·회전만 처리한다. */
+  will-change: transform;
 }
 
 /* 화면 전환: DISSOLVE 0.15초 ease-out */
