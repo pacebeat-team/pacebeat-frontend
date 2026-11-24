@@ -8,7 +8,6 @@ import todayDot from '../assets/home/today-dot.svg'
 import trackLane1 from '../assets/home/track-lane-1.svg'
 import trackLane2 from '../assets/home/track-lane-2.svg'
 import trackLane3 from '../assets/home/track-lane-3.svg'
-import dividerIcon from '../assets/home/divider.svg'
 import chevronRight from '../assets/icons/chevron-right.svg'
 import mascot from '../assets/images/mascot-p-home.png'
 import { confirmGoalForHomeStart } from '../features/home/homeEntry'
@@ -125,9 +124,8 @@ export function HomePage() {
             <img src={timerIcon} alt="" aria-hidden="true" className="size-[14px]" />
             {hero.goalText}
           </span>
-          <span aria-hidden="true" className="flex h-[10.6px] w-0 items-center justify-center">
-            <img src={dividerIcon} alt="" className="h-[1px] w-[10.6px] max-w-none shrink-0 rotate-90" />
-          </span>
+          {/* Figma `divider`: 길이 10.6px의 세로 선(색 #56631B). 가로 선 이미지를 회전하면 0.88px 선이 흐릿하게 그려져 거의 보이지 않아, 1px 실선으로 그린다. */}
+          <span aria-hidden="true" className="h-[10.6px] w-px shrink-0 rounded-full bg-[#56631b]" />
           <span className="flex items-end gap-[3.5px]">
             <img src={speedIcon} alt="" aria-hidden="true" className="h-[20.3px] w-[19.3px]" />
             {hero.paceText}
