@@ -46,11 +46,16 @@ export interface GpsGapPayload {
 
 export type GrowthPeriodType = 'weekly' | 'monthly'
 
+export type GuidanceFrequencyModeType = 'perKm' | 'offPace' | 'both'
+
 export interface GuidanceSettingsPayload {
   readonly voice_guidance_enabled?: boolean
   readonly vibration_guidance_enabled?: boolean
   readonly guidance_frequency_km?: number
   readonly vibration_intensity?: string
+  readonly beat_guidance_enabled?: boolean
+  readonly guidance_frequency_mode?: GuidanceFrequencyModeType
+  readonly auto_pause_enabled?: boolean
 }
 
 // PATCH /users/me/guidance로 보내는 전체 payload. 서버가 4개 필드를 모두 교체하므로 부분 전송을 타입으로 막는다.
@@ -59,6 +64,13 @@ export interface FullGuidancePayload {
   readonly vibration_guidance_enabled: boolean
   readonly guidance_frequency_km: number
   readonly vibration_intensity: 'low' | 'medium' | 'high'
+  readonly beat_guidance_enabled?: boolean
+  readonly guidance_frequency_mode?: GuidanceFrequencyModeType
+  readonly auto_pause_enabled?: boolean
+}
+
+export interface RunBulkDeleteResponse {
+  readonly deleted_count: number
 }
 
 export interface HomeSummaryResponse {

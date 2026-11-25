@@ -1,14 +1,19 @@
+import { fromBaselineResponse } from './baselineMapper.ts'
+import type { RemoteBaselineView } from './baselineMapper.ts'
 import { findRunRequestViolations, fromRunDetail, LOCAL_INVALID_CODE, parseRunList, toRunCreateRequest } from './runMapper.ts'
 import { createRunSyncQueue, RUN_SYNC_QUEUE_KEY } from './runSyncQueue.ts'
 import type { QueueStorage, RunCreator, RunSyncQueue } from './runSyncQueue.ts'
 import { toFullGuidancePayload } from './guidanceMapper.ts'
+import type { LocalGuidanceSyncInput } from './guidanceMapper.ts'
 import { fromUserProfileResponse, isClearableProfileField, sanitizeProfileRequest, toProfileUpdateRequest } from './profileMapper.ts'
 import type { ClearableProfileField, LocalProfileSnapshot } from './profileMapper.ts'
 import { detailToRunRecord, fillEmptyProfile, IMPORT_LEDGER_KEY, parseLedger, planImport, serializeLedger } from './recordImport.ts'
 import type { ProfileFields } from './recordImport.ts'
 import type {
+  BaselineResponse,
   BaselineUpsertRequest,
   FullGuidancePayload,
+  GuidanceSettingsPayload,
   RunDetailResponse,
   RunReflectionPayload,
   UserProfileResponse,
@@ -29,10 +34,13 @@ export interface SyncApi extends RunCreator {
     list(range?: { from?: string; to?: string }): Promise<unknown>
     get(runId: string): Promise<RunDetailResponse>
     updateReflection(runId: string, body: RunReflectionPayload): Promise<unknown>
+    deleteAll?(): Promise<unknown>
+    deleteBySession?(clientSessionId: string): Promise<unknown>
   }
   readonly users: {
     getMe(): Promise<UserProfileResponse>
     updateMe(body: UserProfileUpdateRequest): Promise<unknown>
+    getBaseline?(): Promise<BaselineResponse>
     putBaseline(body: BaselineUpsertRequest): Promise<unknown>
     updateGuidance(body: FullGuidancePayload): Promise<unknown>
   }
@@ -48,10 +56,11 @@ interface PendingOps {
   profileClears: ClearableProfileField[]
   baseline: BaselineUpsertRequest | null
   voiceGuide: boolean | null
+  guidanceExtra: Omit<LocalGuidanceSyncInput, 'voiceGuide'> | null
   reflections: Record<string, RunReflectionPayload>
 }
 
-const EMPTY_PENDING: PendingOps = { profile: false, profileRequest: null, profileClears: [], baseline: null, voiceGuide: null, reflections: {} }
+const EMPTY_PENDING: PendingOps = { profile: false, profileRequest: null, profileClears: [], baseline: null, voiceGuide: null, guidanceExtra: null, reflections: {} }
 
 export interface SyncDeps {
   // 요청을 만든 계정(userId)에 묶인 API를 돌려준다. 토큰을 받는 시점에 계정이 바뀌었으면 요청을 보내지 않는 API여야 한다(wiring이 보장). 단일 사용자 모드(getUserId 없음)에서는 null이 넘어온다.
@@ -66,6 +75,8 @@ export interface SyncDeps {
   // 로컬 접근(읽기 + 새 기록 추가 + 빈 프로필 채우기). 없으면 해당 기능은 동작하지 않는다.
   readonly getLocalProfile?: () => LocalProfileSnapshot
   readonly applyProfilePatch?: (patch: Partial<ProfileFields>) => void
+  readonly applyRemoteBaseline?: (baseline: RemoteBaselineView) => void
+  readonly applyRemoteGuidance?: (guidance: GuidanceSettingsPayload) => void
   readonly loadLocalRecords?: () => readonly RunRecord[]
   readonly saveLocalRecord?: (record: RunRecord) => void
   // 로컬 기록이 아직 있는지(present), 지워졌는지(absent), 저장소를 읽을 수 없어 알 수 없는지(unknown). 생략하면 확인하지 않고 항상 보낸다.
@@ -181,6 +192,7 @@ export function createSyncRuntime(deps: SyncDeps) {
       profileClears: Array.isArray(j.profileClears) ? j.profileClears.filter(isClearableProfileField) : [],
       baseline: typeof j.baseline === 'object' && j.baseline !== null ? j.baseline : null,
       voiceGuide: typeof j.voiceGuide === 'boolean' ? j.voiceGuide : null,
+      guidanceExtra: typeof j.guidanceExtra === 'object' && j.guidanceExtra !== null ? j.guidanceExtra : null,
       reflections: typeof j.reflections === 'object' && j.reflections !== null ? j.reflections : {},
     }
   }
@@ -302,11 +314,20 @@ export function createSyncRuntime(deps: SyncDeps) {
     }
     if (isStale(owner, epoch)) return // 응답을 기다리는 동안 로그아웃·계정 변경: 이전 계정의 설정을 새 계정으로 보내지 않는다
     // 조회하는 동안 로컬 설정이 다시 바뀌었을 수 있으므로 보내기 직전의 최신 값을 쓴다.
-    const v = readPending(owner).voiceGuide
+    const latestPending = readPending(owner)
+    const v = latestPending.voiceGuide
+    const extra = latestPending.guidanceExtra
     if (v === null) return
-    const body = toFullGuidancePayload({ voiceGuide: v }, current)
+    const body = toFullGuidancePayload({ voiceGuide: v, ...(extra ?? {}) }, current)
     if (body === null) return
-    if (await safe(() => api.users.updateGuidance(body))) mutatePending(owner, (p) => void (p.voiceGuide === v && (p.voiceGuide = null)))
+    if (await safe(() => api.users.updateGuidance(body))) {
+      mutatePending(owner, (p) => {
+        if (p.voiceGuide === v && JSON.stringify(p.guidanceExtra) === JSON.stringify(extra)) {
+          p.voiceGuide = null
+          p.guidanceExtra = null
+        }
+      })
+    }
   })
   const sendReflections = serialized(async () => {
     const owner = ownerKey()
@@ -402,10 +423,33 @@ export function createSyncRuntime(deps: SyncDeps) {
     const api = ready(owner)
     if (api === null || deps.getLocalProfile === undefined || deps.applyProfilePatch === undefined) return
     try {
-      const remote = fromUserProfileResponse(await api.users.getMe())
+      const res = await api.users.getMe()
       if (isStale(owner, epoch)) return // 응답을 기다리는 동안 로그아웃·계정 변경
+      const remote = fromUserProfileResponse(res)
       const patch = fillEmptyProfile(deps.getLocalProfile().profile, remote.profile)
       if (Object.keys(patch).length > 0) deps.applyProfilePatch(patch)
+      if (deps.applyRemoteGuidance !== undefined && res !== null && typeof res === 'object' && 'guidance' in res && res.guidance !== null && typeof res.guidance === 'object') {
+        deps.applyRemoteGuidance(res.guidance)
+      }
+    } catch {
+      // 다음 기회에 다시
+    }
+  })
+
+  // 서버에 저장된 기초 측정 기준(GET /api/v1/users/me/baseline)을 가져와 유효한 기준 페이스가 있으면 로컬에 반영한다.
+  const pullBaseline = shared(async (): Promise<void> => {
+    if (deps.applyRemoteBaseline === undefined) return
+    const owner = ownerKey()
+    const epoch = authEpoch()
+    if (owner === null) return
+    const api = ready(owner)
+    if (api === null || api.users.getBaseline === undefined) return
+    try {
+      const remote = fromBaselineResponse(await api.users.getBaseline())
+      if (isStale(owner, epoch)) return
+      if (remote.qualityStatus === 'valid' && remote.paceSecPerKm !== null && remote.paceSecPerKm > 0) {
+        deps.applyRemoteBaseline(remote)
+      }
     } catch {
       // 다음 기회에 다시
     }
@@ -465,6 +509,7 @@ export function createSyncRuntime(deps: SyncDeps) {
       await sendVoice()
       await sendReflections()
       await pullProfile()
+      await pullBaseline()
       await pullRuns()
     }),
     // 프로필이 바뀐 즉시 대기 표시와 변경 스냅샷만 남긴다(디바운스 대기 중 앱이 닫혀도 다음 시작에 보낸다). 전송은 하지 않는다.
@@ -476,9 +521,26 @@ export function createSyncRuntime(deps: SyncDeps) {
       markProfile(clears)
       await sendProfile()
     },
-    async syncVoiceGuidance(settings: { readonly voiceGuide: boolean }): Promise<void> {
-      mutatePending(writeOwner(), (p) => void (p.voiceGuide = settings.voiceGuide))
+    async syncVoiceGuidance(settings: LocalGuidanceSyncInput): Promise<void> {
+      const { voiceGuide, ...extra } = settings
+      const hasExtra = Object.keys(extra).length > 0
+      mutatePending(writeOwner(), (p) => {
+        p.voiceGuide = voiceGuide
+        p.guidanceExtra = hasExtra ? extra : null
+      })
       await sendVoice()
+    },
+    async syncDeleteAllRuns(): Promise<void> {
+      const owner = ownerKey()
+      const epoch = authEpoch()
+      if (owner === null) return
+      const api = ready(owner)
+      if (api === null || api.runs.deleteAll === undefined) return
+      if (await safe(() => api.runs.deleteAll!())) {
+        if (isStale(owner, epoch)) return
+        memoryLedger.clear()
+        saveLedger(new Set())
+      }
     },
     async syncBaseline(request: BaselineUpsertRequest): Promise<void> {
       mutatePending(writeOwner(), (p) => void (p.baseline = request))
@@ -497,6 +559,7 @@ export function createSyncRuntime(deps: SyncDeps) {
     },
     pullRuns,
     pullProfile,
+    pullBaseline,
     // 현재 소유자(없으면 guest)의 대기 작업 요약.
     pendingSummary: (owner: string = writeOwner()) => {
       const p = readPending(owner)

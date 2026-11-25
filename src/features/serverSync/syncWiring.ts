@@ -9,10 +9,11 @@ import { runResultStore } from '../running/runResultStore.ts'
 import { createRunStorage } from '../running/runStorage.ts'
 import { deriveRecordId } from '../running/record.ts'
 import { baselineRequestFromMetrics } from './baselineMapper.ts'
+import { mergeServerGuidance } from './guidanceMapper.ts'
 import { clearedProfileFields } from './profileMapper.ts'
 import { toReflectionPayload } from './runMapper.ts'
 import { createSyncRuntime } from './syncRuntime.ts'
-import { notifyRunsChanged, REFLECTION_SAVED_EVENT } from '../records/recordsEvents.ts'
+import { notifyRunsChanged, REFLECTION_SAVED_EVENT, RUNS_DELETED_EVENT } from '../records/recordsEvents.ts'
 import type { RunReflection } from '../running/types.ts'
 
 // 앱 시작 때 한 번 연결한다(main.tsx가 App보다 먼저 불러온다). api가 null이거나 로그인하지 않았으면 아무 일도 하지 않는다.
@@ -48,6 +49,32 @@ export const syncRuntime = createSyncRuntime({
     return { profile: p.profile, consent: p.consent, completedAt: p.completedAt, experienceLevel: o.experienceLevel, weeklyRuns: o.weeklyRuns }
   },
   applyProfilePatch: (patch) => profileStore.getState().setProfile(patch),
+  applyRemoteGuidance: (serverGuidance) => {
+    const current = guidanceSettingsStore.getState()
+    const merged = mergeServerGuidance(
+      {
+        voiceGuide: current.voiceGuide,
+        beatGuide: current.beatGuide,
+        frequency: current.frequency,
+        autoPause: current.autoPause,
+      },
+      serverGuidance,
+    )
+    if (merged.voiceGuide !== current.voiceGuide) current.setVoiceGuide(merged.voiceGuide)
+    if (merged.beatGuide !== undefined && merged.beatGuide !== current.beatGuide) current.setBeatGuide(merged.beatGuide)
+    if (merged.frequency !== undefined && merged.frequency !== current.frequency) current.setFrequency(merged.frequency)
+    if (merged.autoPause !== undefined && merged.autoPause !== current.autoPause) current.setAutoPause(merged.autoPause)
+  },
+  applyRemoteBaseline: (remote) => {
+    if (remote.qualityStatus === 'valid' && remote.paceSecPerKm !== null && remote.paceSecPerKm > 0) {
+      useOnboardingStore.getState().completeBaselineMeasurement()
+      try {
+        browserStorage()?.setItem('pacebeat:sync:baseline-pace:v1', String(remote.paceSecPerKm))
+      } catch {
+        // 저장 실패 무시
+      }
+    }
+  },
   loadLocalRecords: () => createRunStorage().loadRecords(),
   saveLocalRecord: (record) => createRunStorage().saveRecord(record),
   // 로컬에서 지운 기록은 서버로 보내지 않는다. 저장소를 읽을 수 없으면 판단하지 않고 보존한다.
@@ -106,9 +133,16 @@ const onReflectionSaved = (event: Event) => {
   const payload = detail.reflection === null ? { difficulty: null, reasons: [], memo: '' } : toReflectionPayload(detail.reflection)
   void syncRuntime.syncReflection(detail.sessionId, payload)
 }
+const onRunsDeleted = () => {
+  void syncRuntime.syncDeleteAllRuns()
+}
 if (typeof window !== 'undefined') {
   window.addEventListener(REFLECTION_SAVED_EVENT, onReflectionSaved)
-  stops.push(() => window.removeEventListener(REFLECTION_SAVED_EVENT, onReflectionSaved))
+  window.addEventListener(RUNS_DELETED_EVENT, onRunsDeleted)
+  stops.push(() => {
+    window.removeEventListener(REFLECTION_SAVED_EVENT, onReflectionSaved)
+    window.removeEventListener(RUNS_DELETED_EVENT, onRunsDeleted)
+  })
 }
 
 // 기초 측정: 완료 표시가 처음 true가 될 때 측정값으로 보낸다(기준 페이스는 기존 computeBaselinePace).
@@ -124,12 +158,29 @@ stops.push(
   }),
 )
 
-// 안내 설정: 음성 안내가 바뀔 때만 보낸다(다른 안내 설정은 서버 필드가 없어 보내지 않는다).
-let lastVoice = guidanceSettingsStore.getState().voiceGuide
+// 안내 설정: 음성 안내·박자 안내·안내 빈도·자동 일시정지 4종 중 하나라도 바뀔 때 서버에 반영한다.
+let lastGuidance = {
+  voiceGuide: guidanceSettingsStore.getState().voiceGuide,
+  beatGuide: guidanceSettingsStore.getState().beatGuide,
+  frequency: guidanceSettingsStore.getState().frequency,
+  autoPause: guidanceSettingsStore.getState().autoPause,
+}
 stops.push(
   guidanceSettingsStore.subscribe((state) => {
-    if (state.voiceGuide !== lastVoice) void syncRuntime.syncVoiceGuidance({ voiceGuide: state.voiceGuide })
-    lastVoice = state.voiceGuide
+    const changed =
+      state.voiceGuide !== lastGuidance.voiceGuide ||
+      state.beatGuide !== lastGuidance.beatGuide ||
+      state.frequency !== lastGuidance.frequency ||
+      state.autoPause !== lastGuidance.autoPause
+    if (changed) {
+      lastGuidance = {
+        voiceGuide: state.voiceGuide,
+        beatGuide: state.beatGuide,
+        frequency: state.frequency,
+        autoPause: state.autoPause,
+      }
+      void syncRuntime.syncVoiceGuidance(lastGuidance)
+    }
   }),
 )
 

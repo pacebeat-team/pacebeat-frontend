@@ -219,3 +219,110 @@ describe('서버 → 로컬 프로필', () => {
     assert.equal(s.patches.length, 0)
   })
 })
+
+describe('실서버 연동 확장 (기초 측정 복원·안내 설정 4종·전체 기록 삭제)', () => {
+  test('pullBaseline: 서버에 유효한 기준 페이스가 있으면 applyRemoteBaseline으로 전달한다', async () => {
+    const received: unknown[] = []
+    const api: SyncApi = {
+      runs: { create: async () => ({}), list: async () => [], get: async () => detail('s1'), updateReflection: async () => undefined },
+      users: {
+        getMe: async () => blankServerProfile(),
+        updateMe: async () => undefined,
+        getBaseline: async () => ({
+          user_id: 'u1',
+          skipped: false,
+          quality_status: 'valid',
+          baseline_pace_sec_per_km: 390,
+          cadence_spm: 162,
+          stride_length_cm: 95,
+          valid_duration_ms: 180_000,
+          distance_m: 460,
+          measured_at: '2026-11-20T09:00:00.000Z',
+        }),
+        putBaseline: async () => undefined,
+        updateGuidance: async () => undefined,
+      },
+    }
+    const rt = createSyncRuntime({
+      getApi: () => api,
+      isSignedIn: () => true,
+      queueStorage: mem(),
+      applyRemoteBaseline: (b) => void received.push(b),
+    })
+    await rt.pullBaseline()
+    assert.equal(received.length, 1)
+    assert.equal((received[0] as { paceSecPerKm: number }).paceSecPerKm, 390)
+  })
+
+  test('syncVoiceGuidance & pullProfile: 안내 설정 4종(voiceGuide·beatGuide·frequency·autoPause) 양방향 동기화', async () => {
+    const sentGuidance: unknown[] = []
+    const appliedGuidance: unknown[] = []
+    const api: SyncApi = {
+      runs: { create: async () => ({}), list: async () => [], get: async () => detail('s1'), updateReflection: async () => undefined },
+      users: {
+        getMe: async () =>
+          blankServerProfile({
+            ...SERVER_GUIDANCE_FIXTURE,
+            beat_guidance_enabled: false,
+            guidance_frequency_mode: 'both',
+            auto_pause_enabled: false,
+          }),
+        updateMe: async () => undefined,
+        putBaseline: async () => undefined,
+        updateGuidance: async (b) => void sentGuidance.push(b),
+      },
+    }
+    const rt = createSyncRuntime({
+      getApi: () => api,
+      isSignedIn: () => true,
+      queueStorage: mem(),
+      getLocalProfile: () => ({ profile: emptyProfile, consent, completedAt: 1, experienceLevel: null, weeklyRuns: null }),
+      applyProfilePatch: () => undefined,
+      applyRemoteGuidance: (g) => void appliedGuidance.push(g),
+    })
+    await rt.syncVoiceGuidance({ voiceGuide: false, beatGuide: true, frequency: 'offPace', autoPause: true })
+    assert.equal(sentGuidance.length, 1)
+    assert.deepEqual(sentGuidance[0], {
+      ...SERVER_GUIDANCE_FIXTURE,
+      voice_guidance_enabled: false,
+      beat_guidance_enabled: true,
+      guidance_frequency_mode: 'offPace',
+      auto_pause_enabled: true,
+    })
+    await rt.pullProfile()
+    assert.equal(appliedGuidance.length, 1)
+    assert.equal((appliedGuidance[0] as { guidance_frequency_mode?: string }).guidance_frequency_mode, 'both')
+  })
+
+  test('syncDeleteAllRuns: 서버 전체 러닝 기록 삭제 호출 후 가져오기 장부를 초기화한다', async () => {
+    const storage = mem()
+    storage.setItem(IMPORT_LEDGER_KEY, JSON.stringify({ version: 1, ids: ['s1', 's2'] }))
+    let deleteAllCalls = 0
+    const api: SyncApi = {
+      runs: {
+        create: async () => ({}),
+        list: async () => [],
+        get: async () => detail('s1'),
+        updateReflection: async () => undefined,
+        deleteAll: async () => {
+          deleteAllCalls += 1
+          return { deleted_count: 2 }
+        },
+      },
+      users: {
+        getMe: async () => blankServerProfile(),
+        updateMe: async () => undefined,
+        putBaseline: async () => undefined,
+        updateGuidance: async () => undefined,
+      },
+    }
+    const rt = createSyncRuntime({
+      getApi: () => api,
+      isSignedIn: () => true,
+      queueStorage: storage,
+    })
+    await rt.syncDeleteAllRuns()
+    assert.equal(deleteAllCalls, 1)
+    assert.equal(storage.getItem(IMPORT_LEDGER_KEY), JSON.stringify({ version: 1, ids: [] }))
+  })
+})
