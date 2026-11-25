@@ -12,6 +12,7 @@ import type {
   InsoleSideType,
   InsoleStatusUpdateRequest,
   PostureGrowthResponse,
+  RunBulkDeleteResponse,
   RunCreateRequest,
   RunDetailResponse,
   RunReflectionPayload,
@@ -63,6 +64,10 @@ export function createApi(client: ApiClient) {
       get: (runId: string) => client.request<RunDetailResponse>('GET', `/api/v1/runs/${encodeURIComponent(runId)}`),
       updateReflection: (runId: string, body: RunReflectionPayload) =>
         client.request<RunDetailResponse>('PATCH', `/api/v1/runs/${encodeURIComponent(runId)}/reflection`, { body }),
+      delete: (runId: string) => client.request<null>('DELETE', `/api/v1/runs/${encodeURIComponent(runId)}`),
+      deleteBySession: (clientSessionId: string) =>
+        client.request<null>('DELETE', `/api/v1/runs/by-session/${encodeURIComponent(clientSessionId)}`),
+      deleteAll: () => client.request<RunBulkDeleteResponse>('DELETE', '/api/v1/runs'),
     },
 
     growth: {

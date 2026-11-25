@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { createDeleteAction } from '../../features/my/deleteAction'
 import { MY_ROUTES } from '../../features/my/routes'
 import { useMyBack } from '../../features/my/useMyBack'
+import { notifyRunsDeleted } from '../../features/records/recordsEvents'
 import { DeviceScreen } from './DeviceParts'
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -22,7 +23,12 @@ export function DataDeletePage() {
     <DeviceScreen
       title="데이터 삭제"
       onBack={action.cancel}
-      onConfirm={() => void action.confirm()}
+      onConfirm={() => {
+        const outcome = action.confirm()
+        if (outcome.status === 'deleted' || outcome.status === 'nothing') {
+          notifyRunsDeleted()
+        }
+      }}
       secondary={{ label: '돌아가기', onClick: action.cancel }}
     >
       <p className="mt-4 text-[16px] leading-6">러닝 기록과 인솔 측정 데이터를 삭제하면 복원할 수 없어요.</p>
