@@ -13,10 +13,12 @@ import mascot from '../assets/images/mascot-p-home.png'
 import { confirmGoalForHomeStart } from '../features/home/homeEntry'
 import { buildHomeRecordsView, EMPTY_HOME_RECORDS } from '../features/home/homeRecords'
 import { buildGoalRowValue, buildHeroView, buildWeekRow } from '../features/home/homeView'
+import { useRecommended3KmGoal } from '../features/home/useRecommendedGoal'
+import { formatPace } from '../features/running/format'
 import { RUN_PATHS } from '../features/running/runFlow'
 import { runSetupStore } from '../features/running/runSetupStore'
 import { createRunStorage } from '../features/running/runStorage'
-import { useRunStore } from '../features/running/runStore'
+import { runStore, useRunStore } from '../features/running/runStore'
 
 const MEASUREMENT_GUIDE_PATH = '/measurement/guide'
 const MY_PATH = '/my'
@@ -39,7 +41,12 @@ export function HomePage() {
   const navigate = useNavigate()
   const draft = useRunStore((state) => state.draft)
   const [now] = useState(() => new Date())
-  const hero = buildHeroView(draft.distanceKm, draft.targetDurationSec)
+  const recommended = useRecommended3KmGoal(now.getTime())
+  // 사용자가 아직 직접 목표를 수정한 적이 없으면(recentGoals 비어 있음) P!PACE 4단계 추천 목표를 기본으로 보여준다.
+  const hasCustomGoal = draft.recentGoals.length > 0 || draft.distanceKm !== 3 || draft.targetDurationSec !== 1350
+  const effectiveDistanceKm = hasCustomGoal ? draft.distanceKm : recommended.distanceKm
+  const effectiveDurationSec = hasCustomGoal ? draft.targetDurationSec : recommended.targetDurationSec
+  const hero = buildHeroView(effectiveDistanceKm, effectiveDurationSec)
   const week = buildWeekRow(now)
   // 마운트할 때마다 저장된 기록을 다시 읽는다. 읽을 수 없으면 기록이 없는 것처럼 보인다(오류를 보이지 않는다).
   const [records] = useState(() => {
@@ -51,6 +58,10 @@ export function HomePage() {
   })
 
   const startRun = () => {
+    if (!hasCustomGoal) {
+      runStore.getState().setDistance(recommended.distanceKm)
+      runStore.getState().setTargetDuration(recommended.targetDurationSec)
+    }
     // 목표 화면을 건너뛰므로 가드가 되돌리지 않게 목표 단계를 확정한다.
     confirmGoalForHomeStart(runSetupStore)
     navigate(RUN_PATHS.music)
@@ -165,7 +176,11 @@ export function HomePage() {
           </>
         )}
         <nav aria-label="홈 바로가기" className="flex flex-col">
-          <ActivityRow to={RUN_PATHS.goal} label="추천 목표 수정" value={buildGoalRowValue(draft.distanceKm, draft.targetDurationSec)} />
+          <ActivityRow
+            to={RUN_PATHS.goal}
+            label="추천 목표 수정"
+            value={`${buildGoalRowValue(effectiveDistanceKm, effectiveDurationSec)} (${formatPace(recommended.displayPaceSecPerKm)}/km)`}
+          />
           <div className="h-px bg-line" aria-hidden="true" />
           <ActivityRow to={MEASUREMENT_GUIDE_PATH} label="기초 측정 다시 하기" />
         </nav>
