@@ -70,12 +70,12 @@ export function HomePage() {
   return (
     // 상태바 영역(44px)과 하단 내비 영역은 AppLayout의 프레임 여백이 비운다.
     <div className="flex flex-col bg-app-bg px-[14px] pb-5 pt-[18px] font-pace text-ink [&>*]:shrink-0">
-      <header className="relative flex h-[51px] items-start px-[7px]">
+      <header className="sticky top-0 z-20 -mx-[14px] -mt-[18px] flex h-[69px] items-start bg-app-bg/95 px-[21px] pt-[18px] backdrop-blur-xs">
         <p className="text-[23.5px] font-bold leading-[29px] tracking-[-0.8px]">P!PACE</p>
         <Link
           to={MY_PATH}
           aria-label="마이"
-          className="absolute -top-[11px] right-[19px] block size-[51px] overflow-hidden rounded-full border border-lime"
+          className="absolute right-[33px] top-[7px] block size-[51px] overflow-hidden rounded-full border border-lime"
         >
           <img src={avatarImage} alt="" className="size-full object-cover" />
         </Link>

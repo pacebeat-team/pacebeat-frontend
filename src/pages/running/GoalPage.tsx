@@ -56,8 +56,10 @@ export function GoalPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace">
       <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-6 pt-3 [&>*]:shrink-0">
-        <p className="text-[23.5px] font-bold leading-[29px] text-ink">P!PACE</p>
-        <h1 className="mt-4 text-[32px] font-light leading-[44px] tracking-[-0.96px] text-ink">어떻게 달릴까요?</h1>
+        <header className="sticky top-0 z-20 -mx-6 -mt-3 bg-app-bg/95 px-6 pb-2 pt-3 backdrop-blur-xs">
+          <p className="text-[23.5px] font-bold leading-[29px] text-ink">P!PACE</p>
+        </header>
+        <h1 className="mt-2 text-[32px] font-light leading-[44px] tracking-[-0.96px] text-ink">어떻게 달릴까요?</h1>
 
         <section
           aria-label="목표 설정"

@@ -140,8 +140,10 @@ export function GoalResult({ summary, arrival = false }: { summary: RunSummary; 
 function ResultHeading({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <>
-      <p className="text-[23.5px] font-bold leading-[29px]">P!PACE</p>
-      <h1 className="mt-4 text-[34px] font-light leading-[44px] tracking-[-1.02px]">{title}</h1>
+      <header className="sticky top-0 z-20 -mx-6 -mt-3 bg-app-bg/95 px-6 pb-2 pt-3 backdrop-blur-xs">
+        <p className="text-[23.5px] font-bold leading-[29px]">P!PACE</p>
+      </header>
+      <h1 className="mt-2 text-[34px] font-light leading-[44px] tracking-[-1.02px]">{title}</h1>
       <p className="mt-4 text-[15px] leading-6 text-muted">{subtitle}</p>
     </>
   )

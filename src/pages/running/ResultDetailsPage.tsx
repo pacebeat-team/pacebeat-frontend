@@ -29,8 +29,10 @@ export function ResultDetailsPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace text-ink">
       <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-6 pt-3 [&>*]:shrink-0">
-        <p className="text-[23.5px] font-bold leading-[29px]">P!PACE</p>
-        <h1 className="mt-4 text-[34px] font-light leading-[44px] tracking-[-1.02px]">{targetKm} km, 끝까지!</h1>
+        <header className="sticky top-0 z-20 -mx-6 -mt-3 bg-app-bg/95 px-6 pb-2 pt-3 backdrop-blur-xs">
+          <p className="text-[23.5px] font-bold leading-[29px]">P!PACE</p>
+        </header>
+        <h1 className="mt-2 text-[34px] font-light leading-[44px] tracking-[-1.02px]">{targetKm} km, 끝까지!</h1>
         {delta !== null && <p className="mt-4 text-[15px] leading-6 text-muted">{deltaText(delta, targetSec)}</p>}
         <div className="mt-5">
           <AchievementCard>

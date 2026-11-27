@@ -32,9 +32,11 @@ export function IntroPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg font-pace">
       <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-6 pt-3">
-        <p className="text-[23.5px] font-bold leading-[29px] text-ink">P!PACE</p>
+        <header className="sticky top-0 z-20 -mx-6 -mt-3 bg-app-bg/95 px-6 pb-2 pt-3 backdrop-blur-xs">
+          <p className="text-[23.5px] font-bold leading-[29px] text-ink">P!PACE</p>
+        </header>
 
-        <h1 className="mt-5 text-[42px] font-light leading-[52px] tracking-[-1.26px] text-ink">
+        <h1 className="mt-3 text-[42px] font-light leading-[52px] tracking-[-1.26px] text-ink">
           처음부터,
           <br />
           내 페이스로.
