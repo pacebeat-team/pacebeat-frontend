@@ -255,6 +255,98 @@ export function evaluateStageCoaching(
   }
 }
 
+// ---------------------------------------------------------------------------
+// TTS 음성 코칭 판정 및 Web Speech API 출력 (오차 범위 ±12초 초과 시 + 쿨타임 25초)
+// ---------------------------------------------------------------------------
+export const VOICE_COACHING_COOLDOWN_MS = 25_000
+
+export const VOICE_COACHING_MESSAGES: Readonly<Record<'speed_up' | 'slow_down', string>> = Object.freeze({
+  speed_up: '목표보다 조금 느려요. 박자에 맞춰 보폭을 높여요.',
+  slow_down: '목표보다 빨라요. 리듬을 조금 늦춰도 좋아요.',
+})
+
+export interface VoiceCoachingTrackerState {
+  readonly lastSpokenAtMs: number | null
+  readonly lastSpokenStatus: StagePaceMatchStatus | null
+}
+
+export function createVoiceCoachingTracker(): VoiceCoachingTrackerState {
+  return { lastSpokenAtMs: null, lastSpokenStatus: null }
+}
+
+export interface VoiceCoachingDecisionInput {
+  readonly voiceGuideEnabled: boolean
+  readonly soundOn: boolean
+  readonly isRunning: boolean
+  readonly coachingStatus: StagePaceMatchStatus
+  readonly nowMs: number
+  readonly cooldownMs?: number
+}
+
+export interface VoiceCoachingDecision {
+  readonly shouldSpeak: boolean
+  readonly text: string | null
+  readonly nextState: VoiceCoachingTrackerState
+}
+
+// 유저가 설정에서 음성 안내를 켰고(voiceGuideEnabled === true), 진행 화면 오디오 토글이 켜져 있으며(soundOn === true),
+// 오차 범위 ±12초/km를 벗어나 speed_up 또는 slow_down 상태일 때만 쿨타임(기본 25초) 간격으로 음성 멘트를 출력한다.
+export function decideVoiceCoaching(
+  tracker: VoiceCoachingTrackerState,
+  input: VoiceCoachingDecisionInput,
+): VoiceCoachingDecision {
+  const cooldownMs = input.cooldownMs ?? VOICE_COACHING_COOLDOWN_MS
+  if (!input.isRunning || !input.voiceGuideEnabled || !input.soundOn) {
+    return { shouldSpeak: false, text: null, nextState: tracker }
+  }
+  if (input.coachingStatus !== 'speed_up' && input.coachingStatus !== 'slow_down') {
+    return {
+      shouldSpeak: false,
+      text: null,
+      nextState:
+        tracker.lastSpokenStatus === input.coachingStatus
+          ? tracker
+          : { ...tracker, lastSpokenStatus: input.coachingStatus },
+    }
+  }
+
+  const sinceLast =
+    tracker.lastSpokenAtMs === null || !Number.isFinite(input.nowMs)
+      ? Infinity
+      : input.nowMs - tracker.lastSpokenAtMs
+  const statusChanged = tracker.lastSpokenStatus !== input.coachingStatus
+
+  // 상태가 새로 벗어났고 최소 8초 이상 지났거나, 같은 벗어남 상태가 쿨타임(25초) 이상 지속되면 안내
+  const readyByTime = statusChanged ? sinceLast >= 8_000 : sinceLast >= cooldownMs
+  if (!readyByTime) {
+    return { shouldSpeak: false, text: null, nextState: tracker }
+  }
+
+  return {
+    shouldSpeak: true,
+    text: VOICE_COACHING_MESSAGES[input.coachingStatus],
+    nextState: {
+      lastSpokenAtMs: input.nowMs,
+      lastSpokenStatus: input.coachingStatus,
+    },
+  }
+}
+
+export function speakKoreanCoaching(text: string): void {
+  try {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+      return
+    }
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'ko-KR'
+    utterance.rate = 1.02
+    window.speechSynthesis.speak(utterance)
+  } catch {
+    // 브라우저 TTS 미지원 또는 권한 차단 시 무시
+  }
+}
+
 // 브라우저 DeviceMotionEvent 구독기. 지원하지 않는 환경에서도 예외 없이 동작한다.
 export interface MotionSource {
   start(): void

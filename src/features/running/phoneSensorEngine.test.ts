@@ -2,10 +2,13 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
   createStepDetectorState,
+  createVoiceCoachingTracker,
+  decideVoiceCoaching,
   estimateBpmFromPace,
   evaluateStageCoaching,
   feedAccelSample,
   getLiveSensorReading,
+  VOICE_COACHING_MESSAGES,
 } from './phoneSensorEngine.ts'
 import { createRunLive, selectLiveSensorAndStage } from './runLive.ts'
 import { createRunStorage } from './runStorage.ts'
@@ -59,6 +62,64 @@ describe('핸드폰 가속도 센서 기반 걸음(Step) 및 실시간 BPM·속�
     assert.equal(evaluateStageCoaching(420, 425, 158).status, 'on_pace')
     assert.equal(evaluateStageCoaching(455, 420, 158).status, 'speed_up')
     assert.equal(evaluateStageCoaching(390, 420, 158).status, 'slow_down')
+  })
+
+  test('음성 코칭(TTS) 판정: 기본(voiceGuide=false)에서는 출력하지 않고, 켰을 때만 ±12초 초과 시 쿨타임(25초) 간격으로 출력한다', () => {
+    let tracker = createVoiceCoachingTracker()
+
+    // 1) voiceGuideEnabled = false (기본값): 오차 범위 초과여도 음성 출력 안 함
+    const offDecision = decideVoiceCoaching(tracker, {
+      voiceGuideEnabled: false,
+      soundOn: true,
+      isRunning: true,
+      coachingStatus: 'speed_up',
+      nowMs: 1_000_000,
+    })
+    assert.equal(offDecision.shouldSpeak, false)
+
+    // 2) voiceGuideEnabled = true & speed_up: 최초 즉시 출력
+    const first = decideVoiceCoaching(tracker, {
+      voiceGuideEnabled: true,
+      soundOn: true,
+      isRunning: true,
+      coachingStatus: 'speed_up',
+      nowMs: 1_000_000,
+    })
+    assert.equal(first.shouldSpeak, true)
+    assert.equal(first.text, VOICE_COACHING_MESSAGES.speed_up)
+    tracker = first.nextState
+
+    // 3) 10초 뒤 같은 speed_up: 쿨타임(25초) 전이므로 중복 출력 안 함
+    const withinCooldown = decideVoiceCoaching(tracker, {
+      voiceGuideEnabled: true,
+      soundOn: true,
+      isRunning: true,
+      coachingStatus: 'speed_up',
+      nowMs: 1_010_000,
+    })
+    assert.equal(withinCooldown.shouldSpeak, false)
+
+    // 4) 26초 뒤 같은 speed_up: 쿨타임 경과 후 재출력
+    const afterCooldown = decideVoiceCoaching(tracker, {
+      voiceGuideEnabled: true,
+      soundOn: true,
+      isRunning: true,
+      coachingStatus: 'speed_up',
+      nowMs: 1_026_000,
+    })
+    assert.equal(afterCooldown.shouldSpeak, true)
+    tracker = afterCooldown.nextState
+
+    // 5) 10초 뒤 slow_down으로 방향 전환: 최소 간격(8초) 경과 후 즉시 전환 안내
+    const switched = decideVoiceCoaching(tracker, {
+      voiceGuideEnabled: true,
+      soundOn: true,
+      isRunning: true,
+      coachingStatus: 'slow_down',
+      nowMs: 1_036_000,
+    })
+    assert.equal(switched.shouldSpeak, true)
+    assert.equal(switched.text, VOICE_COACHING_MESSAGES.slow_down)
   })
 })
 

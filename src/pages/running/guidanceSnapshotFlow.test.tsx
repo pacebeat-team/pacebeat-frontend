@@ -83,7 +83,7 @@ describe('안내 설정 → 러닝 시작 스냅샷 (실제 화면 흐름)', () 
     await startTimeRunViaCountdown()
     expect(runStore.getState().activeSession?.guidance).toEqual({
       beatGuide: false,
-      voiceGuide: true,
+      voiceGuide: false,
       frequency: 'perKm',
       autoPause: false,
     })
@@ -99,9 +99,9 @@ describe('안내 설정 → 러닝 시작 스냅샷 (실제 화면 흐름)', () 
     const settings = render(<SettingsScreen />)
     await user.click(screen.getByRole('switch', { name: /음성 안내/ }))
     await user.click(screen.getByRole('button', { name: '둘 다' }))
-    expect(screen.getByRole('switch', { name: /음성 안내/ })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: /음성 안내/ })).toBeChecked()
     settings.unmount()
-    expect(getGuidanceSnapshot()).toMatchObject({ voiceGuide: false, frequency: 'both' })
+    expect(getGuidanceSnapshot()).toMatchObject({ voiceGuide: true, frequency: 'both' })
 
     // 진행 중인 세션은 바뀌지 않는다. 수동 일시정지·재개도 스냅샷을 건드리지 않는다.
     expect(runStore.getState().activeSession?.guidance).toEqual(started)
@@ -114,7 +114,7 @@ describe('안내 설정 → 러닝 시작 스냅샷 (실제 화면 흐름)', () 
     // 다음 러닝부터 바뀐 값이 적용된다.
     endRun()
     await startTimeRunViaCountdown()
-    expect(runStore.getState().activeSession?.guidance).toMatchObject({ voiceGuide: false, frequency: 'both' })
+    expect(runStore.getState().activeSession?.guidance).toMatchObject({ voiceGuide: true, frequency: 'both' })
   })
 
   test('설정은 값만 복사된다: 스냅샷에 스토어의 함수가 섞이지 않는다', () => {

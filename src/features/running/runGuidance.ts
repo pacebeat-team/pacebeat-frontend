@@ -15,7 +15,7 @@ export interface RunGuidance {
 
 export const DEFAULT_RUN_GUIDANCE: RunGuidance = Object.freeze({
   beatGuide: true,
-  voiceGuide: true,
+  voiceGuide: false,
   frequency: 'offPace',
   autoPause: true,
 })

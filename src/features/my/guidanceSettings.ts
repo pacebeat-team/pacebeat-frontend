@@ -19,11 +19,11 @@ export interface GuidanceSettings {
   readonly autoPause: boolean
 }
 
-// Figma 기본 상태: 음악 박자 안내·음성 안내·자동 일시정지 켜짐, 안내 빈도 "벗어날 때만".
+// 기본 상태: 음악 박자 안내·자동 일시정지 켜짐, 음성 안내 꺼짐(유저가 설정에서 켰을 때만 음성 출력), 안내 빈도 "벗어날 때만".
 // 박자 자동 조절(준비 중)과 진동(미지원)은 값이 아니라 고정된 꺼짐 표시라서 저장하지 않는다.
 export const DEFAULT_GUIDANCE_SETTINGS: GuidanceSettings = Object.freeze({
   beatGuide: true,
-  voiceGuide: true,
+  voiceGuide: false,
   frequency: 'offPace',
   autoPause: true,
 })

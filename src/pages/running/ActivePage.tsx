@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import attention from '../../assets/icons/run-attention.svg'
 import mascot from '../../assets/images/mascot-p.png'
@@ -6,8 +7,15 @@ import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { TextButton } from '../../components/common/TextButton'
 import { formatClock, formatDistanceKm, formatDistanceKm2, formatPace, formatRemainingKm2, formatPaceOrDash } from '../../features/running/format'
 import { findMusicTrack } from '../../features/running/music'
-import { evaluateStageCoaching } from '../../features/running/phoneSensorEngine'
+import {
+  createVoiceCoachingTracker,
+  decideVoiceCoaching,
+  evaluateStageCoaching,
+  speakKoreanCoaching,
+} from '../../features/running/phoneSensorEngine'
+import { useRunAudio } from '../../features/running/runAudioStore'
 import { RUN_PATHS } from '../../features/running/runFlow'
+import { getSessionGuidance } from '../../features/running/runGuidance'
 import { runLive, selectLiveMetrics, selectLiveSensorAndStage, useRunLive } from '../../features/running/runLive'
 import { getGoalProgress, getRequiredPaceSecPerKm } from '../../features/running/runProgress'
 import { useRunStore } from '../../features/running/runStore'
@@ -20,27 +28,46 @@ export function ActivePage() {
   const navigate = useNavigate()
   const active = useRunStore((state) => state.activeSession)
   const liveState = useRunLive((state) => state)
+  const soundOn = useRunAudio((state) => state.soundOn)
+  const voiceTrackerRef = useRef(createVoiceCoachingTracker())
   const { gps, now } = liveState
   const status = active?.session.status ?? null
 
   useRunClock(status === 'running')
   useBlockBack(status !== null && status !== 'finished')
 
-  // 목표 거리 도달 등으로 세션이 끝났을 때의 화면 전환(도착 → 결과)은 RunFlowGuard가 정한다(이 화면은 이동하지 않는다).
-
-  if (active === null || status === 'finished') return null
-  const metrics = selectLiveMetrics(active, gps, now)
-  if (metrics === null) return null
-  const sensorAndStage = selectLiveSensorAndStage(active, liveState)
+  const metrics = active !== null && status !== 'finished' ? selectLiveMetrics(active, gps, now) : null
+  const sensorAndStage = active !== null && status !== 'finished' ? selectLiveSensorAndStage(active, liveState) : null
   const sensor = sensorAndStage?.sensor ?? null
   const stageGuidance = sensorAndStage?.stageGuidance ?? null
-  const selectedTrack = findMusicTrack(active.musicTrackId)
-  const effectivePaceSec = metrics.currentPaceSecPerKm ?? sensor?.paceSecPerKm ?? null
+  const selectedTrack = findMusicTrack(active?.musicTrackId ?? null)
+  const effectivePaceSec = metrics?.currentPaceSecPerKm ?? sensor?.paceSecPerKm ?? null
   const coaching = evaluateStageCoaching(
     effectivePaceSec,
     stageGuidance?.displayPaceSecPerKm ?? null,
     selectedTrack?.bpm ?? null,
   )
+  const sessionGuidance = getSessionGuidance(active)
+
+  // 유저가 설정에서 음성 안내를 켜두었고(sessionGuidance.voiceGuide === true), 진행 화면 스피커 토글이 켜져 있을 때
+  // 오차 범위 ±12초를 벗어나면(speed_up / slow_down) 쿨타임(25초) 간격으로 한국어 TTS 코칭을 재생한다.
+  useEffect(() => {
+    const decision = decideVoiceCoaching(voiceTrackerRef.current, {
+      voiceGuideEnabled: sessionGuidance.voiceGuide,
+      soundOn,
+      isRunning: status === 'running' && active?.mode === 'gps',
+      coachingStatus: coaching.status,
+      nowMs: now,
+    })
+    voiceTrackerRef.current = decision.nextState
+    if (decision.shouldSpeak && decision.text !== null) {
+      speakKoreanCoaching(decision.text)
+    }
+  }, [active?.mode, coaching.status, now, sessionGuidance.voiceGuide, soundOn, status])
+
+  // 목표 거리 도달 등으로 세션이 끝났을 때의 화면 전환(도착 → 결과)은 RunFlowGuard가 정한다(이 화면은 이동하지 않는다).
+
+  if (active === null || status === 'finished' || metrics === null) return null
   const isTime = active.mode === 'time'
   const progress = getGoalProgress(active.goal, metrics.distanceM)
 
