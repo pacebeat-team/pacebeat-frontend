@@ -9,10 +9,19 @@ import type { GpsErrorReason, RawFix } from '../measurement/types.ts'
 import { haversineMeters } from '../measurement/geo.ts'
 import { feedAutoPause, INITIAL_AUTO_PAUSE } from './autoPause.ts'
 import type { AutoPauseState } from './autoPause.ts'
+import {
+  createDeviceMotionSource,
+  createStepDetectorState,
+  feedAccelSample,
+  getLiveSensorReading,
+} from './phoneSensorEngine.ts'
+import type { AccelSample, LiveSensorReading, MotionSource, StepDetectorState } from './phoneSensorEngine.ts'
 import { getSessionGuidance } from './runGuidance.ts'
 import { isGoalReached } from './policy.ts'
 import { createGpsRunState, feedGpsFix, getGpsRunMetrics, getTimeRunMetrics } from './runMetrics.ts'
 import type { GpsRunState, RunLiveMetrics } from './runMetrics.ts'
+import { computeStagePaceGuidance } from './runProgress.ts'
+import type { RealtimePaceGuidance } from './runProgress.ts'
 import { getRunElapsedMs } from './runSession.ts'
 import type { RunEndReason } from './runSession.ts'
 import { runStore } from './runStore.ts'
@@ -35,6 +44,10 @@ export const HEARTBEAT_MS = 5000
 
 export interface RunLiveData {
   readonly gps: GpsRunState
+  readonly steps: StepDetectorState
+  // 85% 이후 100m 단위로 갱신한 직전 실시간 필요 페이스(95% 이후 고정에 사용)
+  readonly lastRealtimeBucket: number | null
+  readonly lastRealtimeRawPaceSecPerKm: number | null
   // 화면 갱신용 현재 시각(epoch ms). 시계(1초 틱)가 tick으로 갱신한다.
   readonly now: number
 }
@@ -48,6 +61,7 @@ export interface RunLiveDeps {
   readonly queryPermission?: (onChange: (state: GpsPermission) => void) => Promise<GpsPermission>
   readonly now?: () => number
   readonly createSource?: (handlers: GpsSourceHandlers) => GpsSource
+  readonly createMotion?: (onSample: (sample: AccelSample) => void) => MotionSource
   readonly createId?: () => string
   // 화면이 다시 보일 때 호출되는 콜백을 등록한다. 해제 함수를 돌려준다. 기본은 document의 visibilitychange.
   readonly listenVisible?: (callback: () => void) => () => void
@@ -84,13 +98,21 @@ export function createRunLive(deps: RunLiveDeps = {}) {
   const runs = deps.store ?? runStore
   const clock = deps.now ?? Date.now
   const createSource = deps.createSource ?? ((handlers) => createGeolocationSource(handlers))
+  const createMotion = deps.createMotion ?? ((onSample) => createDeviceMotionSource(onSample, clock))
   const createId = deps.createId ?? createSessionId
   const listenVisible = deps.listenVisible ?? defaultListenVisible
   const autoHeartbeat = deps.autoHeartbeat ?? true
   const queryPermission = deps.queryPermission ?? defaultQueryPermission
 
-  const live = createStore<RunLiveData>()(() => ({ gps: createGpsRunState(), now: clock() }))
+  const live = createStore<RunLiveData>()(() => ({
+    gps: createGpsRunState(),
+    steps: createStepDetectorState(),
+    lastRealtimeBucket: null,
+    lastRealtimeRawPaceSecPerKm: null,
+    now: clock(),
+  }))
   let source: GpsSource | null = null
+  let motionSource: MotionSource | null = null
   let onUnavailable: ((reason: GpsErrorReason) => void) | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let unlistenVisible: (() => void) | null = null
@@ -123,6 +145,49 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     source = null
     onUnavailable = null
     current?.stop()
+  }
+
+  function stopMotion(): void {
+    const current = motionSource
+    motionSource = null
+    current?.stop()
+  }
+
+  function startMotion(): void {
+    if (motionSource !== null && motionSource.isRunning) return
+    motionSource = createMotion(handleAccelSample)
+    motionSource.start()
+  }
+
+  function handleAccelSample(sample: AccelSample): void {
+    const active = runs.getState().activeSession
+    if (active === null || active.session.status !== 'running') return
+    const next = feedAccelSample(live.getState().steps, sample)
+    live.setState({ steps: next.state, now: Math.max(live.getState().now, sample.atMs) })
+  }
+
+  function updateRealtimeStageCache(distanceM: number, elapsedMs: number): void {
+    const active = runs.getState().activeSession
+    if (active === null || active.mode !== 'gps') return
+    const state = live.getState()
+    const guidance = computeStagePaceGuidance({
+      goal: active.goal,
+      distanceM,
+      elapsedMs,
+      lastCalculatedRawPaceSecPerKm: state.lastRealtimeRawPaceSecPerKm,
+    })
+    if (guidance === null || guidance.section !== 'realtime') return
+    if (
+      !guidance.isFrozenAfter95Pct &&
+      guidance.stepBucketIndex !== null &&
+      guidance.stepBucketIndex !== state.lastRealtimeBucket &&
+      guidance.rawRequiredPaceSecPerKm !== null
+    ) {
+      live.setState({
+        lastRealtimeBucket: guidance.stepBucketIndex,
+        lastRealtimeRawPaceSecPerKm: guidance.rawRequiredPaceSecPerKm,
+      })
+    }
   }
 
   function startSource(): void {
@@ -177,6 +242,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     const metrics = getGpsRunMetrics(fed.state, session, fed.result.fix.at)
     const distanceM = metrics.distanceM ?? 0
     runs.getState().recordDistanceSample(metrics.elapsedMs, distanceM)
+    updateRealtimeStageCache(distanceM, metrics.elapsedMs)
     if (isGoalReached('gps', active.goal, distanceM)) {
       // 목표 도달: 한 번만 종료한다(종료 후에는 status가 running이 아니므로 다시 오지 않는다).
       stopRunInternal(fed.result.fix.at, 'goal')
@@ -261,6 +327,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     resetAutoPause()
     runs.getState().stopRun(now, reason)
     stopSource()
+    stopMotion()
     stopMonitoring()
   }
 
@@ -273,7 +340,13 @@ export function createRunLive(deps: RunLiveDeps = {}) {
       const id = prepareId
       permission = 'unknown'
       gotSignal = false
-      live.setState({ gps: createGpsRunState(), now: clock() })
+      live.setState({
+        gps: createGpsRunState(),
+        steps: createStepDetectorState(),
+        lastRealtimeBucket: null,
+        lastRealtimeRawPaceSecPerKm: null,
+        now: clock(),
+      })
       onUnavailable = options.onUnavailable
       startSource()
       // 권한 상태를 확인한다. 응답이 오기 전에 다음 준비가 시작됐거나 취소됐으면 무시한다.
@@ -293,7 +366,14 @@ export function createRunLive(deps: RunLiveDeps = {}) {
     cancelPrepare(): void {
       prepareId += 1
       stopSource()
-      live.setState({ gps: createGpsRunState(), now: clock() })
+      stopMotion()
+      live.setState({
+        gps: createGpsRunState(),
+        steps: createStepDetectorState(),
+        lastRealtimeBucket: null,
+        lastRealtimeRawPaceSecPerKm: null,
+        now: clock(),
+      })
     },
     // 세션을 시작한다. GPS는 prepare에서 시작한 수집을 이어 쓰고, TIME은 위치 수집이 없다.
     // guidance: 시작 시점의 안내 설정(세션에 고정된다).
@@ -304,13 +384,19 @@ export function createRunLive(deps: RunLiveDeps = {}) {
       onUnavailable = null
       resetAutoPause()
       runs.getState().startRun(mode, now, createId, guidance)
-      live.setState({ now })
+      live.setState({
+        steps: createStepDetectorState(),
+        lastRealtimeBucket: null,
+        lastRealtimeRawPaceSecPerKm: null,
+        now,
+      })
       if (mode === 'time') stopSource()
       else if (source === null || !source.isRunning) {
         // 준비 없이 시작한 경우의 안전장치: 수집을 지금 시작한다.
         onUnavailable = null
         startSource()
       }
+      startMotion()
       startMonitoring()
     },
     pause(): void {
@@ -318,6 +404,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
       resetAutoPause()
       runs.getState().pauseRun(now)
       live.setState({ now })
+      stopMotion()
       stopMonitoring()
     },
     // 같은 세션을 이어간다. 일시정지 중 위치 구독이 멈춰 있으면 이때 다시 시작해 위치를 재확인한다.
@@ -331,6 +418,7 @@ export function createRunLive(deps: RunLiveDeps = {}) {
         onUnavailable = null
         startSource()
       }
+      startMotion()
       startMonitoring()
       syncGaps(now)
     },
@@ -338,6 +426,10 @@ export function createRunLive(deps: RunLiveDeps = {}) {
       const now = clock()
       stopRunInternal(now, reason)
       live.setState({ now })
+    },
+    // 가속도 센서 샘플을 직접 주입한다(단위 테스트 및 센서 브리지용).
+    feedMotionSample(sample: AccelSample): void {
+      handleAccelSample(sample)
     },
     heartbeat,
     tick(): void {
@@ -363,4 +455,29 @@ export function selectLiveMetrics(
   if (active === null) return null
   const at = active.session.status === 'finished' && active.session.endedAt !== null ? active.session.endedAt : now
   return active.mode === 'gps' ? getGpsRunMetrics(gps, active.session, at) : getTimeRunMetrics(active.session, at)
+}
+
+// 실시간 센서(GPS + 모션 가속도계) 융합 속도·BPM 및 P!PACE 3구간 페이스 안내 파생값.
+export function selectLiveSensorAndStage(
+  active: RunStoreState['activeSession'],
+  liveState: RunLiveData,
+): {
+  readonly sensor: LiveSensorReading
+  readonly stageGuidance: RealtimePaceGuidance | null
+} | null {
+  if (active === null) return null
+  const metrics = selectLiveMetrics(active, liveState.gps, liveState.now)
+  if (metrics === null) return null
+  const sensor = getLiveSensorReading(liveState.steps, liveState.now, metrics.currentPaceSecPerKm)
+  if (active.mode !== 'gps') {
+    return { sensor, stageGuidance: null }
+  }
+  const distanceM = metrics.distanceM ?? 0
+  const stageGuidance = computeStagePaceGuidance({
+    goal: active.goal,
+    distanceM,
+    elapsedMs: metrics.elapsedMs,
+    lastCalculatedRawPaceSecPerKm: liveState.lastRealtimeRawPaceSecPerKm,
+  })
+  return { sensor, stageGuidance }
 }

@@ -16,8 +16,8 @@ function memory() {
   return { data, getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) }
 }
 
-test('기본값은 Figma 기본 상태이고 저장 키는 다른 저장소와 겹치지 않는다', () => {
-  assert.deepEqual(DEFAULT_GUIDANCE_SETTINGS, { beatGuide: true, voiceGuide: true, frequency: 'offPace', autoPause: true })
+test('기본값은 Figma 기본 상태(음성 안내 기본 꺼짐)이고 저장 키는 다른 저장소와 겹치지 않는다', () => {
+  assert.deepEqual(DEFAULT_GUIDANCE_SETTINGS, { beatGuide: true, voiceGuide: false, frequency: 'offPace', autoPause: true })
   for (const other of ['pacebeat:run:records:v1', 'pacebeat-profile', 'pacebeat-onboarding', 'pacebeat:measurement:v1', 'pacebeat:run:settings']) {
     assert.notEqual(GUIDANCE_STORAGE_KEY, other)
   }
@@ -30,7 +30,7 @@ test('읽기: 없음·깨짐·다른 버전은 기본값, 알 수 없는 항목�
   assert.deepEqual(parseGuidanceSettings('[]'), DEFAULT_GUIDANCE_SETTINGS)
   assert.deepEqual(
     parseGuidanceSettings(JSON.stringify({ version: 1, data: { beatGuide: false, voiceGuide: 'yes', frequency: 'weird', autoPause: false } })),
-    { beatGuide: false, voiceGuide: true, frequency: 'offPace', autoPause: false },
+    { beatGuide: false, voiceGuide: false, frequency: 'offPace', autoPause: false },
   )
 })
 

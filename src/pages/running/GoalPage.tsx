@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import runMinus from '../../assets/icons/run-minus.svg'
 import runPlus from '../../assets/icons/run-plus.svg'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
+import { useRecommended3KmGoal } from '../../features/home/useRecommendedGoal'
 import { formatDistanceKm, formatDuration, formatGoalChip, formatPace } from '../../features/running/format'
 import {
   GOAL_DISTANCES,
@@ -10,21 +11,37 @@ import {
   getTargetPaceSecPerKm,
   stepDurationSec,
 } from '../../features/running/goal'
+import { buildStagePacePlan } from '../../features/running/recommendationPolicy'
 import { RUN_PATHS } from '../../features/running/runFlow'
 import { runSetupStore } from '../../features/running/runSetupStore'
 import { runStore, useRunStore } from '../../features/running/runStore'
 
-// Figma `RUN / Goal`. 기준 페이스가 없어 "내 기준보다 …"·"추천 목표 …으로 바꾸기" 문구는 만들지 않는다.
+const BASIS_LABELS = {
+  recent_runs: '최근 28일 러닝 기록(60%) + 기준 페이스(40%) 반영',
+  baseline: '기초 측정 기준 페이스(100%) 반영',
+  onboarding: '온보딩 러닝 경험 · 주간 횟수 맞춤 추천',
+  default_starter: 'P!PACE 기본 스타터 추천(7:00/km)',
+} as const
+
+// Figma `RUN / Goal`. P!PACE 4단계 추천 목표와 3구간(몸풀기·리듬 유지·후반 스퍼트) 목표 페이스 계획을 함께 안내한다.
 export function GoalPage() {
   const navigate = useNavigate()
   const draft = useRunStore((state) => state.draft)
   const { distanceKm, targetDurationSec, recentGoals } = draft
   const range = getDurationRangeSec(distanceKm)
+  const recommended = useRecommended3KmGoal()
+  const targetPaceSec = getTargetPaceSecPerKm(distanceKm, targetDurationSec)
+  const stagePlan = buildStagePacePlan(targetPaceSec)
 
   // 목표 화면에 들어오면 이후 단계(음악·준비 확인)는 다시 확정해야 한다.
   useEffect(() => {
     runSetupStore.getState().enterGoal()
   }, [])
+
+  const applyRecommendedGoal = useCallback(() => {
+    runStore.getState().setDistance(recommended.distanceKm)
+    runStore.getState().setTargetDuration(recommended.targetDurationSec)
+  }, [recommended.distanceKm, recommended.targetDurationSec])
 
   const step = useCallback((direction: 1 | -1) => {
     const { draft: current } = runStore.getState()
@@ -104,8 +121,26 @@ export function GoalPage() {
           </div>
 
           <p className="relative mt-[14px] whitespace-pre text-[17px] font-medium leading-[26px] text-ink">
-            {`목표 페이스  ${formatPace(getTargetPaceSecPerKm(distanceKm, targetDurationSec))} /km`}
+            {`목표 페이스  ${formatPace(targetPaceSec)} /km`}
           </p>
+
+          <div className="relative mt-3 rounded-[18px] bg-white/55 px-3.5 py-2.5 text-[13px] leading-[19px] text-ink">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">{BASIS_LABELS[recommended.basis]}</span>
+              {(distanceKm !== recommended.distanceKm || targetDurationSec !== recommended.targetDurationSec) && (
+                <button
+                  type="button"
+                  onClick={applyRecommendedGoal}
+                  className="shrink-0 cursor-pointer rounded-full bg-ink px-2.5 py-0.5 text-[12px] font-medium text-app-bg"
+                >
+                  추천 {formatGoalChip(recommended.distanceKm, recommended.targetDurationSec)} 적용
+                </button>
+              )}
+            </div>
+            <p className="mt-1 text-[12px] text-[#455116]">
+              3구간 계획: 몸풀기(0~15%) {formatPace(stagePlan.warmupPaceSecPerKm)}/km · 리듬(15~85%) {formatPace(stagePlan.rhythmPaceSecPerKm)}/km · 85% 이후 실시간 페이스
+            </p>
+          </div>
         </section>
 
         <PrimaryButton label="다음 · 음악 고르기" onClick={handleNext} className="mt-[18px] shrink-0" />

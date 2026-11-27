@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import attention from '../../assets/icons/run-attention.svg'
 import mascot from '../../assets/images/mascot-p.png'
@@ -5,8 +6,17 @@ import { PauseIcon, StopIcon } from '../../components/common/RunIcons'
 import { PrimaryButton } from '../../components/common/PrimaryButton'
 import { TextButton } from '../../components/common/TextButton'
 import { formatClock, formatDistanceKm, formatDistanceKm2, formatPace, formatRemainingKm2, formatPaceOrDash } from '../../features/running/format'
+import { findMusicTrack } from '../../features/running/music'
+import {
+  createVoiceCoachingTracker,
+  decideVoiceCoaching,
+  evaluateStageCoaching,
+  speakKoreanCoaching,
+} from '../../features/running/phoneSensorEngine'
+import { useRunAudio } from '../../features/running/runAudioStore'
 import { RUN_PATHS } from '../../features/running/runFlow'
-import { runLive, selectLiveMetrics, useRunLive } from '../../features/running/runLive'
+import { getSessionGuidance } from '../../features/running/runGuidance'
+import { runLive, selectLiveMetrics, selectLiveSensorAndStage, useRunLive } from '../../features/running/runLive'
 import { getGoalProgress, getRequiredPaceSecPerKm } from '../../features/running/runProgress'
 import { useRunStore } from '../../features/running/runStore'
 import { AudioToggle } from './AudioToggle'
@@ -17,18 +27,47 @@ import { useBlockBack, useRunClock } from './useRunClock'
 export function ActivePage() {
   const navigate = useNavigate()
   const active = useRunStore((state) => state.activeSession)
-  const gps = useRunLive((state) => state.gps)
-  const now = useRunLive((state) => state.now)
+  const liveState = useRunLive((state) => state)
+  const soundOn = useRunAudio((state) => state.soundOn)
+  const voiceTrackerRef = useRef(createVoiceCoachingTracker())
+  const { gps, now } = liveState
   const status = active?.session.status ?? null
 
   useRunClock(status === 'running')
   useBlockBack(status !== null && status !== 'finished')
 
+  const metrics = active !== null && status !== 'finished' ? selectLiveMetrics(active, gps, now) : null
+  const sensorAndStage = active !== null && status !== 'finished' ? selectLiveSensorAndStage(active, liveState) : null
+  const sensor = sensorAndStage?.sensor ?? null
+  const stageGuidance = sensorAndStage?.stageGuidance ?? null
+  const selectedTrack = findMusicTrack(active?.musicTrackId ?? null)
+  const effectivePaceSec = metrics?.currentPaceSecPerKm ?? sensor?.paceSecPerKm ?? null
+  const coaching = evaluateStageCoaching(
+    effectivePaceSec,
+    stageGuidance?.displayPaceSecPerKm ?? null,
+    selectedTrack?.bpm ?? null,
+  )
+  const sessionGuidance = getSessionGuidance(active)
+
+  // 유저가 설정에서 음성 안내를 켜두었고(sessionGuidance.voiceGuide === true), 진행 화면 스피커 토글이 켜져 있을 때
+  // 오차 범위 ±12초를 벗어나면(speed_up / slow_down) 쿨타임(25초) 간격으로 한국어 TTS 코칭을 재생한다.
+  useEffect(() => {
+    const decision = decideVoiceCoaching(voiceTrackerRef.current, {
+      voiceGuideEnabled: sessionGuidance.voiceGuide,
+      soundOn,
+      isRunning: status === 'running' && active?.mode === 'gps',
+      coachingStatus: coaching.status,
+      nowMs: now,
+    })
+    voiceTrackerRef.current = decision.nextState
+    if (decision.shouldSpeak && decision.text !== null) {
+      speakKoreanCoaching(decision.text)
+    }
+  }, [active?.mode, coaching.status, now, sessionGuidance.voiceGuide, soundOn, status])
+
   // 목표 거리 도달 등으로 세션이 끝났을 때의 화면 전환(도착 → 결과)은 RunFlowGuard가 정한다(이 화면은 이동하지 않는다).
 
-  if (active === null || status === 'finished') return null
-  const metrics = selectLiveMetrics(active, gps, now)
-  if (metrics === null) return null
+  if (active === null || status === 'finished' || metrics === null) return null
   const isTime = active.mode === 'time'
   const progress = getGoalProgress(active.goal, metrics.distanceM)
 
@@ -85,19 +124,69 @@ export function ActivePage() {
   }
 
   // Figma `RUNNING / 01`: 상태 바(44) 아래 위 18·좌우 14 패딩, 이어서 12 · 가이드 116 · 8 · 거리 161 · 2 · 진행 78 · 24 · 지표 78 · 28 · 조작 114.
-  const guideText = isTime ? (
-    <>
-      시간을 기록하며
-      <br />
-      편하게 달려요.
-    </>
-  ) : (
-    <>
-      목표 페이스로
-      <br />
-      달리고 있어요.
-    </>
-  )
+  const guideText = (() => {
+    if (isTime) {
+      return (
+        <>
+          시간을 기록하며
+          <br />
+          편하게 달려요.
+        </>
+      )
+    }
+    if (stageGuidance?.isCompletionFirst) {
+      return (
+        <>
+          무리하지 말고
+          <br />
+          내 리듬으로 완주해요!
+        </>
+      )
+    }
+    if (stageGuidance?.section === 'warmup') {
+      return (
+        <>
+          몸풀기 구간 ({formatPaceOrDash(stageGuidance.displayPaceSecPerKm)}/km)
+          <br />
+          가볍게 리듬을 찾아요.
+        </>
+      )
+    }
+    if (stageGuidance?.section === 'realtime') {
+      return (
+        <>
+          막판 스퍼트 ({formatPaceOrDash(stageGuidance.displayPaceSecPerKm)}/km)
+          <br />
+          {stageGuidance.isFrozenAfter95Pct ? '끝까지 페이스를 유지해요!' : '목표보다 조금 일찍 도착해요!'}
+        </>
+      )
+    }
+    if (coaching.status === 'speed_up') {
+      return (
+        <>
+          목표보다 조금 느려요
+          <br />
+          박자에 맞춰 보폭을 높여요.
+        </>
+      )
+    }
+    if (coaching.status === 'slow_down') {
+      return (
+        <>
+          목표보다 빨라요
+          <br />
+          리듬을 조금 늦춰도 좋아요.
+        </>
+      )
+    }
+    return (
+      <>
+        목표 페이스로
+        <br />
+        달리고 있어요.
+      </>
+    )
+  })()
   return (
     <div className="flex min-h-0 flex-1 flex-col font-pace text-ink">
       {/* 키가 작은 화면(예: 375x667)에서는 지표가 모두 보이도록 위 영역을 줄인다. */}
@@ -174,12 +263,46 @@ export function ActivePage() {
             <div className="flex min-w-0 flex-[151_1_0%] flex-col whitespace-nowrap">
               <p className="text-[14px] font-medium leading-5">{isTime ? '거리 · 페이스' : '현재 페이스'}</p>
               <p className="flex h-[58px] items-baseline gap-[5px]">
-                <span className="text-[42px] leading-[58px] tracking-[0.5px]">{isTime ? '—' : formatPaceOrDash(metrics.currentPaceSecPerKm)}</span>
-                {!isTime && metrics.currentPaceSecPerKm !== null && <span className="text-[20px] leading-[28px]">/km</span>}
+                <span className="text-[42px] leading-[58px] tracking-[0.5px]">{isTime ? '—' : formatPaceOrDash(effectivePaceSec)}</span>
+                {!isTime && effectivePaceSec !== null && <span className="text-[20px] leading-[28px]">/km</span>}
               </p>
             </div>
             <span aria-hidden="true" className="absolute left-[calc((100%-29px)*0.5176+1px)] top-[5px] h-[60px] w-[0.8px] bg-ink" />
           </div>
+        </div>
+
+        {/* 실시간 핸드폰 센서(GPS + 모션 가속도계) 속도 · 케이던스(BPM) 및 3구간 안내 배지 */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[20px] bg-white/45 px-3.5 py-2 text-[13px] leading-[19px] text-ink">
+          <div className="flex items-center gap-3">
+            <span>
+              속도{' '}
+              <strong className="font-semibold">
+                {sensor?.speedKmh !== null && sensor?.speedKmh !== undefined ? `${sensor.speedKmh.toFixed(1)} km/h` : '—'}
+              </strong>
+            </span>
+            <span aria-hidden="true" className="h-3 w-px bg-ink/30" />
+            <span>
+              리듬{' '}
+              <strong className="font-semibold">
+                {sensor?.cadenceBpm !== null && sensor?.cadenceBpm !== undefined
+                  ? `${sensor.cadenceBpm} BPM`
+                  : coaching.targetBpm !== null
+                    ? `목표 ${coaching.targetBpm} BPM`
+                    : '—'}
+              </strong>
+            </span>
+          </div>
+          {!isTime && stageGuidance !== null && (
+            <span className="rounded-full bg-ink px-2.5 py-0.5 text-[12px] font-medium text-app-bg">
+              {stageGuidance.section === 'warmup'
+                ? `1구간 몸풀기 · ${formatPaceOrDash(stageGuidance.displayPaceSecPerKm)}/km`
+                : stageGuidance.section === 'rhythm'
+                  ? `2구간 리듬 유지 · ${formatPaceOrDash(stageGuidance.displayPaceSecPerKm)}/km`
+                  : stageGuidance.isCompletionFirst
+                    ? '3구간 완주 우선 모드'
+                    : `3구간 실시간 · ${formatPaceOrDash(stageGuidance.displayPaceSecPerKm)}/km`}
+            </span>
+          )}
         </div>
         {/* Figma의 지표와 조작 사이 28px 여백 */}
         <div className="h-[28px] [@media(max-height:700px)]:h-5" />

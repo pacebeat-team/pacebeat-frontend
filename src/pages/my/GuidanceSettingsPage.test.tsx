@@ -31,7 +31,7 @@ describe('GuidanceSettingsPage', () => {
       expect(screen.getByRole('region', { name })).toBeInTheDocument()
     }
     expect(screen.getByRole('switch', { name: /음악 박자 안내/ })).toBeChecked()
-    expect(screen.getByRole('switch', { name: /음성 안내/ })).toBeChecked()
+    expect(screen.getByRole('switch', { name: /음성 안내/ })).not.toBeChecked()
     expect(screen.getByRole('switch', { name: /자동 일시정지/ })).toBeChecked()
     expect(screen.getByRole('button', { name: '벗어날 때만' })).toHaveAttribute('aria-pressed', 'true')
   })
