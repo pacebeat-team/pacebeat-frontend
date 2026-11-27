@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
+import type { GpsSourceHandlers } from '../measurement/geolocationSource.ts'
 import {
   createStepDetectorState,
   createVoiceCoachingTracker,
@@ -136,17 +137,20 @@ describe('runLive 센서 통합 및 3구간(몸풀기·리듬·85% 실시간·95
     store.getState().setTargetDuration(1260) // 3km 21:00 (7:00/km = 420초)
 
     let now = 1_700_000_000_000
-    let onFix: ((fix: { lat: number; lng: number; accuracyM: number; deviceTime: number; receivedAt: number }) => void) | null = null
+    let handlers: GpsSourceHandlers | null = null
     const controller = createRunLive({
       store,
       now: () => now,
       createSource: (h) => {
-        onFix = h.onFix
+        handlers = h
         return { start: () => undefined, stop: () => undefined, isRunning: true }
       },
       createMotion: () => ({ start: () => undefined, stop: () => undefined, isRunning: true }),
       autoHeartbeat: false,
     })
+    const emitFix = (lat: number, lng: number) => {
+      handlers?.onFix({ lat, lng, accuracyM: 5, deviceTime: now, receivedAt: now })
+    }
 
     controller.begin('gps')
 
@@ -161,11 +165,11 @@ describe('runLive 센서 통합 및 3구간(몸풀기·리듬·85% 실시간·95
     // 1) 초기 몸풀기 구간 (0.2km < 15%)
     const M_PER_DEG = 111_195
     let currentM = 0
-    onFix?.({ lat: 37, lng: 127, accuracyM: 5, deviceTime: now, receivedAt: now })
+    emitFix(37, 127)
     while (currentM < 200) {
       currentM += 20
       now += 8400 // 8.4초마다 20m 이동 (7:00/km = 2.38m/s, connectGapMs 10초 이내)
-      onFix?.({ lat: 37 + currentM / M_PER_DEG, lng: 127, accuracyM: 5, deviceTime: now, receivedAt: now })
+      emitFix(37 + currentM / M_PER_DEG, 127)
     }
 
     const warmupState = selectLiveSensorAndStage(store.getState().activeSession, controller.live.getState())
@@ -176,7 +180,7 @@ describe('runLive 센서 통합 및 3구간(몸풀기·리듬·85% 실시간·95
     while (currentM < 2580) {
       currentM += 20
       now += 8400
-      onFix?.({ lat: 37 + currentM / M_PER_DEG, lng: 127, accuracyM: 5, deviceTime: now, receivedAt: now })
+      emitFix(37 + currentM / M_PER_DEG, 127)
     }
     const realtime85 = selectLiveSensorAndStage(store.getState().activeSession, controller.live.getState())
     assert.equal(realtime85?.stageGuidance?.section, 'realtime')
@@ -188,7 +192,7 @@ describe('runLive 센서 통합 및 3구간(몸풀기·리듬·85% 실시간·95
     while (currentM < 2880) {
       currentM += 20
       now += 8400
-      onFix?.({ lat: 37 + currentM / M_PER_DEG, lng: 127, accuracyM: 5, deviceTime: now, receivedAt: now })
+      emitFix(37 + currentM / M_PER_DEG, 127)
     }
     const frozen95 = selectLiveSensorAndStage(store.getState().activeSession, controller.live.getState())
     assert.equal(frozen95?.stageGuidance?.section, 'realtime')
