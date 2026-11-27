@@ -216,11 +216,11 @@ export function RecordsPage() {
 
   return (
     <div className="flex flex-col bg-app-bg px-6 pb-6 pt-3 font-pace text-ink [&>*]:shrink-0">
-      <header className="flex flex-col">
+      <header className="sticky top-0 z-20 -mx-6 -mt-3 flex flex-col bg-app-bg/95 px-6 pb-2 pt-3 backdrop-blur-xs">
         <p className="text-[23.5px] font-bold leading-[29px] tracking-[-0.8px]">P!PACE</p>
         <h1 className="mt-4 w-full text-[34px] font-light leading-[44px] tracking-[-1.44px]">기록</h1>
       </header>
-      <div className="mt-4">{body}</div>
+      <div className="mt-2">{body}</div>
     </div>
   )
 }

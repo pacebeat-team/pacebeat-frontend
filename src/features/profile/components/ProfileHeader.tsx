@@ -3,7 +3,7 @@
 // 프로필 화면의 기존 디자인을 그대로 유지하기 위해 합치지 않았다. 두 프로필 화면이 같은 구현을 쓰도록 한 곳에 모았다.
 export function ProfileHeader({ title, onBack }: { title: string; onBack: () => void }) {
   return (
-    <header className="flex h-[44px] items-center gap-[8px]">
+    <header className="sticky top-0 z-20 -mx-[24px] -mt-[12px] flex h-[56px] shrink-0 items-center gap-[8px] bg-[#fefefe]/95 px-[24px] pt-[12px] backdrop-blur-xs">
       <button
         type="button"
         onClick={onBack}
